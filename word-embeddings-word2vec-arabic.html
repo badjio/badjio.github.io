@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="english">
+<head>
+    <link href="http://gmpg.org/xfn/11" rel="profile">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+    <!-- Enable responsiveness on mobile devices-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+
+    <title>Moh Badjah | Blog</title>
+
+    <!-- CSS -->
+    <link href="//fonts.googleapis.com/" rel="dns-prefetch">
+    <link href="//fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic|Abril+Fatface|PT+Sans:400,400italic,700&amp;subset=latin,latin-ext"
+          rel="stylesheet">
+
+    <link rel="stylesheet" href="/theme/css/poole.css"/>
+    <link rel="stylesheet" href="/theme/css/hyde.css"/>
+    <link rel="stylesheet" href="/theme/css/syntax.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <!-- RSS -->
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="/atom.xml">
+</head>
+
+<body class="theme-base-0d">
+<div class="sidebar">
+    <div class="container top-menu">
+        <img class="logo" src="/theme/images/logo-w.png">
+    </div>
+    <div class="container sidebar-sticky">
+        <div class="sidebar-about">
+
+            <h1>
+                <a href="/">
+                    <img class="profile-picture" src="/theme/images/mb-author-pn38y1s5.png">
+                    Moh.B
+                </a>
+            </h1>
+            <p class="lead"></p>
+            <p class="lead">My name's Mohamed Badjah. I mostly ramble here about python and programing in general .. ex: Mechanical Engineer </p>
+            <p></p>
+        </div>
+        <nav class="sidebar-nav">
+            <a class="sidebar-nav-item" href="mailto:moh@badjah.net">
+                <i class="fa fa-at"></i>
+            </a>
+            <a class="sidebar-nav-item" href="https://github.com/badjio">
+                <i class="fa fa-github"></i>
+            </a>
+        </nav>
+    </div>
+</div><div class="content container">
+<div class="post" dir="rtl" >
+	<h1 class="post-title">مقدمة للـ Word2Vec وتضمين الكلمات بالمتجهات</h1>
+	<span class="post-date">Sun 20 May 2018</span>
+	<h2 id="_1">مقدمة:</h2>
+<p>تضمين الكلمات هو نوع من الأساليب المتبعة في معالجة اللغات الطبيعية لنمذجة المصطلحات وتمثيلها على شكل متجهات رياضية،
+هناك عدة طرق لاستخراج هذه المتجهات ولكن أغلب الطرق الحديثة تتم عبر شبكات عصبية، من بين التطبيقات الشهيرة: Word2Vec من جوجل، Glove من ستانفورد، fastText من فايسبوك..في هذه التدوينة سنركز على Word2Vec، ولكن للتنويه فالاختلاف بينها بسيط.</p>
+<p>تكمن أهمية تضمين الكلمات على شكل متجهات رياضية
+  خصوصا في مشاريع التعلم الآلي المتعلقة بمعالجة اللغات الطبيعية، على سبيل المثال: لو قلنا "قط" و "كلب"؛ 
+   بمجرد سماعنا للكلمتين كأشخاص يمكننا استخراج عدة معلومات منها ، مثلا: كلاهما حيوان ولهما أربع أرجل .. ،
+   ولكن في نظام لمعالجة النصوص الطبيعية فسيتم تمثيلها على شكل رموز عشوائية،
+    كاستخدام مؤشرات للكلمات: قط ستصبح "id_241" و كلب "id_4323"، والتي ليس لها معنى ولا توضح العلاقة بين الكلمتين.</p>
+<blockquote>
+<p>You shall know a word by the company it keeps     (Firth, J. R. 1957:11)</p>
+</blockquote>
+<blockquote class="ar-quote"><p>يمكن استنتاج معنى الكلمة من خلال الصحبة التي تبقيها     (ج.ر. فيرث، 1957:11)</p></blockquote>
+
+<h2 id="word2vec">ًWord2Vec</h2>
+<p>تم تقديمه في 2013 بواسطة الباحث Tomas Mikolov وزملائه في Google </p>
+<h3 id="_2">الفكرة:</h3>
+<p>فكرة word2vec هي تدريب متجهات بأبعاد ثابتة اعتمادا على مجموعة نصوص كبيرة، كل كلمة تمثل بنقطة في مجال التضمين، 
+وهذه النقاط يتم استخراجها وتحريكها بناء على المواضع التي تَرِد فيها الكلمة،
+ لذلك الكلمات التي لها معنى مشابه تكون متجهاتها متقاربة والعكس صحيح.</p>
+<figure style="text-align: center;">
+  <img src="https://image.ibb.co/e3X8wJ/152597870722910333.png" style="display: block;margin-left: auto;margin-right: auto;">
+</figure>
+
+<h3 id="_3">النماذج:</h3>
+<p>هناك نموذجين من word2vec وهما:</p>
+<p><strong>CBOW(Continuous Bag-of-Words):</strong>
+يتم تنبؤ الكلمة المطلوبة (مثال: "هدف") من خلال سياق الكلام ("قام اللاعب بإحراز")، ترتيب الكلمات المرافقة لا يؤخذ بالحسبان (لها نفس الوزن لذلك سمي بالـ Bag-of-Words)</p>
+<p><strong>Continuous Skip-gram:</strong>
+عكس CBOW، يتنبأ بسياق الكلام باستخدام الكلمة الحالية، هذا النموذج يعطي وزن أكبر للكلمات القريبة .</p>
+<h3 id="_4">مثال تطبيقي:</h3>
+<p>سنستعمل بايثون في المثال بالاستعانة برزمة Gensim التي تحتوي على العديد من أدوات معالجة النصوص الطبيعية وتوفر تطبيق سهل للـ word2vec</p>
+<pre class="highlight"><code class="language-python"># الأدوات المستخدمة:
+import pandas as pd  # رزمة لقراءة، تحليل ومعالجة البيانات 
+from gensim.models.word2vec import Word2Vec
+import logging
+
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+
+DATA_FILE = 'dataset.csv'</code></pre>
+
+
+<h3 id="_5">النصوص المستخدمة:</h3>
+<p>سأستخدم قاعدة بيانات خاصة عبارة عن ملايين التغريدات العربية، قمت بجمعها سابقا، ولكن بالإمكان استعمال أي قاعدة نصوص طالما تحتوي على عدد كبير من النصوص؛ للحصول على نموذج دقيق.</p>
+<h3 id="_6">المعالجة الأولية:</h3>
+<p>لأن النصوص عبارة عن تغريدات مستخدمي تويتر، فهي مليئة بتشويشات ،أخطاء ورموز..، لذلك قبل تمريرها للنموذج، يجب أولا معالجتها وتنظيفها، مثل:</p>
+<ul>
+<li>حذف الرموز و التعابير والحروف غير العربية.</li>
+<li>حذف التكرارات والتغريدات الصغيرة جدا.</li>
+<li>من الأفضل أيضا توحيد بعض الحروف مثل التاء المربوطة والهاء في نهاية الكلمة، الهمزة في أول الكلمة...</li>
+<li>...</li>
+</ul>
+<p>وأخيرا نقوم بجمعها وحفظها، كل تغريدة في سطر منفصل في ملف csv، لن أتطرق للكود البرمجي في هذه الخطوة لأنها طويلة وليست محل اهتمامنا،</p>
+<pre class="highlight"><code class="language-python">df = pd.read_csv(DATA_FILE, encoding='utf-8', names=['tweet'])
+print(df.head(5))</code></pre>
+
+
+<table>
+<thead>
+<tr>
+<th align="right">tweet</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="right">اصمت كأنني لم افهم واتجاهل كأنني لا ارى</td>
+</tr>
+<tr>
+<td align="right">كل الأشياء العظيمه التي نراها اليوم بدأت متواضعه</td>
+</tr>
+<tr>
+<td align="right">برأيكم هل عوده كارينيو قد تغير شيء في وضع الفريق</td>
+</tr>
+<tr>
+<td align="right">فعلا العالمي له رجال اوفياء امثالكم شكرا لك من القلب</td>
+</tr>
+<tr>
+<td align="right">ثم تأتي كلمه واحده لتهدم كل الكلمات التي بيننا</td>
+</tr>
+</tbody>
+</table>
+<p>سنقرأ الملف الذي يحتوي على النصوص، ولأن النموذج يتوقع من البيانات المدخلة إليه أن تكون عبارة عن قائمة من النصوص التي بدورها مقسمة إلى قائمة من الكلمات، لذلك سنقوم بذلك أولاً:</p>
+<pre class="highlight"><code class="language-python">class Sentences(object):
+def __init__(self, filename):
+    self.filename= filename
+
+def __iter__(self):
+    # قراءة الملف
+    for line in open(self.filename, encoding='utf-8', newline=''):
+        yield line.split() # تقسيم كل سطر إلى قائمة من الكلمات
+
+sentences = Sentences(DATA_FILE)
+
+#[
+#  ['اصمت', 'كأنني', 'لم', 'افهم', 'و', 'اتجاهل', 'كأنني', 'لا', 'ارى']
+#  ['كل', 'الأشياء', 'العظيمه', 'التـي', 'نراها', 'اليوم', 'بدأت', 'متواضعه']
+#  ['برأيكم', 'هل', 'عوده', 'كارينيو', 'قد', 'تغير', 'شيء', 'في', 'وضع', 'الفريق']
+#  ['فعلا', 'العالمي', 'له', 'رجال', 'اوفياء', 'امثالكم', 'شكرا', 'لك', 'من', 'القلب']
+#  ['ثم', 'تأتي', 'كلمه', 'واحده', 'لتهدم', 'كل', 'الكلمات', 'التي', 'بيننا']
+#  ...
+#  ...
+#  ...
+#]</code></pre>
+
+
+<p>نعرف النموذج ونقوم بتزويده بالبيانات المجهزة، مع تحديد بعض الإعدادات، التي تؤثر في دقة النموذج وزمن التدريب،</p>
+<pre class="highlight"><code class="language-python">model = Word2Vec(sentences, min_count=10, size=300, workers=8, iter=15, window=8)</code></pre>
+
+
+<p><u><strong>الإعدادات:</strong></u></p>
+<ul>
+<li><strong>min_count:</strong> العدد الأدنى لتكرر الكلمة حتى يتم اعتبارها، مثلا كلمة تظهر ثلاث مرات في نص مكون من ملايين الكلمات، في الغالب تكون خاطئة أو ليست ذا أهمية.</li>
+<li><strong>size:</strong> أبعاد المتجه، كلما زادت كانت النتائج أفضل (إلى حد معين) ولكن على حساب وقت التدريب ، الافتراضي هو 100</li>
+<li><strong>window:</strong> نافذة (عدد) الكلمات القريبة التي تؤخذ بالحسبان، الافتراضي هو5 (خمس كلمات قبل وأخرى بعد الكلمة الحالية)</li>
+<li><strong>workers:</strong> التدريب المتوازي، لتسريع العملية في الأجهزة ذات معالجات بأنوية متعددة</li>
+<li><strong>iter:</strong> عدد مرات تكرار التدريب على مجموعة النصوص، الافتراضي هو 5</li>
+<li><strong>sg:</strong> تحديد نوع النموذج المستخدم، الافتراضي 0:CBOW ، ويمكن تحديد 1: Skip-gram</li>
+</ul>
+<p>بعد تهيئة النموذج في الخطوة السابقة، سيبدأ التدريب على مجموعة النصوص المدخلة، قد يستغرق عدة ساعات حسب قوة المعالج، الأبعاد المحددة و نافذة الكلمات..</p>
+<pre class="highlight"><code class="language-text">2018-05-10 05:55:00,614 : INFO : collecting all words and their counts
+INFO : PROGRESS: at sentence #10000, processed 144274 words, keeping 36338 word types
+...
+...
+INFO : PROGRESS: at sentence #24170000, processed 325930794 words, keeping 3774812 word types
+INFO : collected 3775438 word types from a corpus of 326022055 raw words and 24177842 sentences
+INFO : min_count=10 retains 584672 unique words (15% of original 3775438, drops 3190766)
+INFO : estimated required memory for 584672 words and 300 dimensions: 1695548800 bytes
+INFO : training model with 8 workers on 584672 vocabulary and 300 features, using sg=0 hs=0 sample=0.001 negative=5 window=8
+INFO : EPOCH 1 - PROGRESS: at 2.14% examples, 62161 words/s,
+...
+...
+INFO : EPOCH 15 - PROGRESS: at 99.82% examples, 579635 words/s
+INFO : training on a 24859060650 raw words (4732521368 effective words) took 5094.7s, 584647 effective words/s</code></pre>
+
+
+<p>سنقوم بحفظ النموذج بعد انتهاء التدريب، لاستعماله لاحقا:</p>
+<pre class="highlight"><code class="language-python">model.save('arabic-tweets-w2v')</code></pre>
+
+
+<p>أصبح بإمكاننا تحميل النموذج المدَرَّب، بدون إعادة التدريب في كل مرة،
+ الآن لم يبقى سوى تجربته، سنبدأ بمثال بسيط، ايجاد الكلمات المشابهة (ترد في سياق مشابه):</p>
+<pre class="highlight"><code class="language-python">model = Word2Vec.load(&quot;arabic-tweets-w2v&quot;)
+model.wv.most_similar('لندن', topn=4)
+
+#&gt; [('اسطنبول', 0.679181), ('دبي', 0.676570), ('الدوحه', 0.657055), ('نيويورك', 0.649382)]
+#&gt;</code></pre>
+
+
+<p>بإمكاننا إجراء عمليات حسابية بين الكلمات، سنجرب المثال الشائع: ملك - رجل + امرأه = ؟</p>
+<pre class="highlight"><code class="language-python">model.wv.most_similar(positive=['امرأه', 'ملك'], negative=['رجل'], topn=1)
+
+#&gt; [('ملكه', 0.5453307628631592)]
+#&gt;</code></pre>
+
+
+<p>أو ، لنجرب : العلاقة بين برشلونة وميسي مثل العلاقة بين ريال مدريد و....؟</p>
+<pre class="highlight"><code class="language-python">model.wv.most_similar(positive=['ميسي', 'الريال'], negative=['برشلونه'], topn=1)
+
+#&gt; [('رونالدو', 0.8029916286468506)]
+#&gt;</code></pre>
+
+
+<p>أيضا، يمكن إيجاد الكلمة الشاذة في قائمة من الكلمات المتشابهة:</p>
+<pre class="highlight"><code class="language-python">model.wv.doesnt_match(&quot;تويوتا مرسيدس سامسونج فورد&quot;.split())
+
+#&gt; سامسونج
+#&gt;</code></pre>
+
+
+<h2 id="_7">مصادر إضافية:</h2>
+<p><ul dir="ltr">
+<li><a href="http://help.sentiment140.com/for-students/">Word2vec Tutorial - Gensim</a></li>
+<li><a href="https://rare-technologies.com/word2vec-tutorial/">Vector Representations of Words - TensorFlow</a></li>
+<li><a href="https://machinelearningmastery.com/develop-word-embeddings-python-gensim/">How to Develop Word Embeddings in Python with Gensim - MachineLearningMastery</a></li>
+<li><a href="https://nlp.stanford.edu/projects/glove/">GloVe: Global Vectors for Word Representation - Stanford</a></li>
+</ul></p>
+</div>
+</div>
+<script
+        src="https://code.jquery.com/jquery-3.3.1.min.js"
+        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+<script src="/ace-build/src-min-noconflict/ace.js" type="text/javascript" charset="utf-8"></script><style>td.linenos {
+    display: none;
+}
+
+pre {
+    box-sizing: content-box;
+    padding: 0;
+    border-radius: 0;
+}
+
+.ace_gutter-cell {
+    cursor: pointer;
+}
+
+.ace_layer {
+    height: 100% !important;
+}
+
+.ace-chrome .ace_marker-layer .ace_selection {
+    border-radius: 0;
+}
+
+span.o {
+    display: block;
+}</style><script>var ACE_EDITOR_SCROLL_TOP_MARGIN = 0;var ACE_EDITOR_THEME = 'monokai';var ACE_EDITOR_MAXLINES = 100;var ACE_EDITOR_READONLY = true;var ACE_EDITOR_AUTOSCROLL = true;var ACE_EDITOR_SHOW_INVISIBLE = false;var SHOW_GUTTER = true;var Range = ace.require("ace/range").Range;
+
+var editor_array = {};
+
+var correlationDic = {
+    'bash': 'sh'
+}
+
+// inspiration : https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt#A_stricter_parse_function
+filterInt = function (value) {
+  if(/^(\-|\+)?([0-9]+|Infinity)$/.test(value))
+    return Number(value);
+  return NaN;
+}
+
+function linesInAnchor(anchor) {
+  anchorObject = {};
+  anchorObject.first = 0;
+  anchorObject.last = 0;
+  anchorObject.anchor = "";
+  var firstLineIndex = anchor.indexOf("-L");
+  var firstResult = anchor.substring(
+    firstLineIndex + 2
+  );
+  if(filterInt(firstResult)) {
+    anchorObject.first = filterInt(firstResult) - 1;
+    anchorObject.last = anchorObject.first;
+    anchorObject.anchor = anchor.substring(0, firstLineIndex + 2) + firstResult;
+    return anchorObject;
+  }
+  var secondLineIndex = firstResult.indexOf("-L");
+
+  if (!filterInt(firstResult.substring(0, secondLineIndex))) {
+    return anchorObject;
+  }
+  anchorObject.anchor = anchor.substring(0, firstLineIndex + 2) + firstResult.substring(0, secondLineIndex);
+
+  anchorObject.first = filterInt(firstResult.substring(0, secondLineIndex)) - 1;
+  var secondResult = firstResult.substring(
+    secondLineIndex + 2
+  );
+  if (!filterInt(secondResult)) {
+    anchorObject.last = anchorObject.first;
+    return anchorObject;
+  }
+  anchorObject.last = filterInt(secondResult) - 1;
+  return anchorObject;
+}
+
+var selectionCallback = function (event, editor) {
+    var editor_id = $(editor.container).attr('id');
+    var range = editor.selection.getRange();
+    location.hash = editor_id + '-L' + parseInt(range.start.row + 1);
+    if ($(editor.container).data().hasOwnProperty("id")) {
+        event.preventDefault();
+    }
+    else if (range.start.row != range.end.row) {
+        location.hash += '-L' + parseInt(range.end.row + 1);
+    }
+    $(editor.container).removeData();
+};
+
+$(function() {
+    var $pre_filter = $('pre.highlight');
+    var pre_len = $pre_filter.length;
+    $pre_filter.each(function(item) {
+        var lang = $(this).find("code").attr('class').substring(9);
+        if (lang in correlationDic) {
+            lang = correlationDic[lang];
+        }
+        var one_render = true;
+        var nb_of_lines = $(this).text().search('\n');
+        // avoid the last carriage return
+        $(this).text($(this).text().substring(0, $(this).text().length));
+
+        // Give a unique id on all editor
+        var editor_id = 'editor' + parseInt(item + 1);
+        $(this).attr('id', editor_id);
+        var editor = ace.edit(editor_id);
+        editor_array[editor_id] = editor;
+        editor.setTheme("ace/theme/" + ACE_EDITOR_THEME);
+        editor.setShowInvisibles(ACE_EDITOR_SHOW_INVISIBLE);
+        editor.setOptions({
+            mode: "ace/mode/" + lang,
+            maxLines: ACE_EDITOR_MAXLINES,
+            readOnly: ACE_EDITOR_READONLY,
+            autoScrollEditorIntoView: ACE_EDITOR_AUTOSCROLL
+        });
+        editor.$blockScrolling = Infinity;
+        if (nb_of_lines === -1) {
+            editor.renderer.setShowGutter(SHOW_GUTTER);
+        }
+
+        editor.renderer.on("afterRender", function(event) {
+            var anchor = linesInAnchor(location.hash);
+            var hash_editor = location.hash.substring(1, location.hash.indexOf("-"));
+            var line = $($(editor.container).find(".ace_gutter-cell")[parseInt(editor_id.substring(6))]);
+            if (hash_editor == editor_id && one_render) {
+                var offset = line.offset();
+                if (offset) {
+                    $(document).scrollTop(offset.top - ACE_EDITOR_SCROLL_TOP_MARGIN);
+                    editor.selection.setRange(new Range(
+                        anchor.first, 0, anchor.last,  Number.MAX_VALUE)
+                    );
+                    one_render = false;
+                }
+            }
+        });
+
+        editor.resize(true);
+        editor.selection.on("changeSelection", function(event) {
+            selectionCallback(event, editor);
+        });
+    });
+
+    $(".ace_gutter-cell").on("click", function(event) {
+        var editor_id = $(this).closest('pre.ace_editor').attr('id');
+        var editor = editor_array[editor_id];
+        var line = parseInt($(this).text()) - 1;
+        editor.selection.setRange(new Range(line, 0, line, Number.MAX_VALUE));
+        $(this).closest('.ace_editor').data({'id': parseInt($(this).text())});
+        selectionCallback(event, editor);
+    });
+});</script>
+<script type="text/javascript">
+    $(window).on('scroll', function () {
+        var pixs = $(document).scrollTop();
+        // console.log(pixs / 100);
+        // pixs = pixs / 100;
+        pixs = Math.min((pixs / 100), 2.5);
+        $(".sidebar-sticky").css({"-webkit-filter": "blur(" + pixs + "px)", "filter": "blur(" + pixs + "px)"})
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="english">
+<head>
+    <link href="http://gmpg.org/xfn/11" rel="profile">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+    <!-- Enable responsiveness on mobile devices-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+
+    <title>Moh Badjah | Blog</title>
+
+    <!-- CSS -->
+    <link href="//fonts.googleapis.com/" rel="dns-prefetch">
+    <link href="//fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic|Abril+Fatface|PT+Sans:400,400italic,700&amp;subset=latin,latin-ext"
+          rel="stylesheet">
+
+    <link rel="stylesheet" href="/theme/css/poole.css"/>
+    <link rel="stylesheet" href="/theme/css/hyde.css"/>
+    <link rel="stylesheet" href="/theme/css/syntax.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <!-- RSS -->
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="/atom.xml">
+</head>
+
+<body class="theme-base-0d">
+<div class="sidebar">
+    <div class="container top-menu">
+        <img class="logo" src="/theme/images/logo-w.png">
+    </div>
+    <div class="container sidebar-sticky">
+        <div class="sidebar-about">
+
+            <h1>
+                <a href="/">
+                    <img class="profile-picture" src="/theme/images/mb-author-pn38y1s5.png">
+                    Moh.B
+                </a>
+            </h1>
+            <p class="lead"></p>
+            <p class="lead">My name's Mohamed Badjah. I mostly ramble here about python and programing in general .. ex: Mechanical Engineer </p>
+            <p></p>
+        </div>
+        <nav class="sidebar-nav">
+            <a class="sidebar-nav-item" href="mailto:moh@badjah.net">
+                <i class="fa fa-at"></i>
+            </a>
+            <a class="sidebar-nav-item" href="https://github.com/badjio">
+                <i class="fa fa-github"></i>
+            </a>
+        </nav>
+    </div>
+</div><div class="content container">
+<div class="post"  >
+	<h1 class="post-title">Categorizing Arabic News Articles With Convolutional Neural Networks</h1>
+	<span class="post-date">Wed 23 May 2018</span>
+	<p>In a previous <a href="/arabic-news-articles-dataset.html">post</a>, I published a dataset of arabic news articles, it contained 140k articles divided into 7 categories.
+In this post, I'll use that dataset as an example to train Neural Networks using keras, 
+to classify each article into one of the seven categories.
+Let's start first by creating 'train.py' file:</p>
+<h2 id="trainpy">train.py</h2>
+<h4 id="packages-parameters">Packages &amp; Parameters:</h4>
+<pre class="highlight"><code class="language-python"># import packages:
+import pandas as pd
+import numpy as np
+import pickle
+import os
+from keras.optimizers import Adam
+from keras.models import Sequential, Input, Model
+from keras.callbacks import ModelCheckpoint
+from keras.layers import Embedding, Dropout, Conv1D, GlobalMaxPooling1D, Dense, Activation, LSTM, concatenate
+from keras.preprocessing.sequence import pad_sequences
+from keras.preprocessing.text import Tokenizer
+from keras.utils import to_categorical
+from gensim.models import Word2Vec
+
+# PARAMETERS:
+MAX_NUM_WORDS = 100000
+MAX_SEQUENCE_LENGTH = 300
+EMBEDDING_DIMS = 100
+VALIDATION_SPLIT = 0.1</code></pre>
+
+
+<h4 id="load-data">Load Data:</h4>
+<p>Using Pandas package to load the csv file, the 'content' column will be our data and 'category' as our labels.</p>
+<pre class="highlight"><code class="language-python">df = pd.read_csv('data.csv', sep=',', encoding='utf-8', names=['title', 'category', 'content'])
+texts = df['content'].tolist()
+labels_list = df['category'].unique()
+labels_ids = {label: index for index, label in enumerate(labels_list)}
+labels = df['category'].apply(lambda x: labels_ids[x]).tolist()
+
+print('labels_ids:', labels_ids)
+
+#&gt; labels_ids: {'business': 0, 'sci-tech': 1, 'variety': 2, 'sports': 3, 'health-medicine': 4, 'news': 5, 'culture-art': 6}</code></pre>
+
+
+<h4 id="process-data">Process Data:</h4>
+<p>Convert the texts into a dictionary of words with unique indexes by using the Tokenizer class provided by Keras.</p>
+<pre class="highlight"><code class="language-python">TOKENIZER_FILE = 'tokenizer.pkl'
+
+# save tokenizer to be used later, important for consistancy:
+if os.path.isfile(TOKENIZER_FILE):  #  load tokenizer file if already saved.
+    with open(TOKENIZER_FILE, 'rb') as f:
+        tokenizer = pickle.load(f)
+else:
+    tokenizer = Tokenizer(num_words=MAX_NUM_WORDS)
+    tokenizer.fit_on_texts(texts)
+    with open(TOKENIZER_FILE, 'wb') as f:
+        pickle.dump(tokenizer, f)
+
+# optional: better to save sequences to a file too.
+sequences = tokenizer.texts_to_sequences(texts)
+
+# pad sequences (with zeros) if smaller than MAX_SEQUENCE_LENGTH, and truncate if larger:
+data = pad_sequences(sequences, maxlen=MAX_SEQUENCE_LENGTH)
+# convert labels to binary matrix with shape: (len(labels), len(labels_list))
+labels = to_categorical(np.asarray(labels))</code></pre>
+
+
+<h4 id="training">Training:</h4>
+<p><strong><u>Model 1:</u></strong></p>
+<p>Let's start with a simple CNN model:</p>
+<pre class="highlight"><code class="language-python">model_no = 1
+model = Sequential()
+model.add(Embedding(MAX_NUM_WORDS,
+                    EMBEDDING_DIMS,
+                    input_length=MAX_SEQUENCE_LENGTH))
+model.add(Dropout(0.3))
+model.add(Conv1D(256, 3, padding='valid', activation='relu', strides=1))
+model.add(GlobalMaxPooling1D())
+model.add(Dropout(0.3))
+model.add(Dense(256))
+model.add(Dense(len(labels_ids), activation='softmax'))</code></pre>
+
+
+<p>Set up some callbacks first: </p>
+<pre class="highlight"><code class="language-python"># Checkpoints: Save the model if a higher validation accuracy achieved.
+cp_name = 'model' + str(model_no) + '-cnn.{epoch:02d}-{val_acc:.4f}.hdf5'
+checkpoint = ModelCheckpoint(cp_name, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+
+# Logs: Save the logs to a file.
+csv_logger = CSVLogger('training.log')
+
+# Early Stopping: Stop the training if the accuracy doesn't improve (patience of 20 epchs) 
+early_stopping = EarlyStopping(monitor='val_acc', patience=20)
+
+callbacks = [checkpoint, csv_logger, early_stopping, ]</code></pre>
+
+
+<p>Now start the training:</p>
+<pre class="highlight"><code class="language-python">model.fit(x_train, y_train,
+          batch_size=BATCH_SIZE,
+          epochs=120,
+          validation_data=(x_val, y_val),
+          callbacks=callbacks_list)</code></pre>
+
+
+<p><br style="display:none"></p>
+<pre class="highlight"><code class="language-text">#&gt;Epoch: 1/120 - loss: 0.5137 - acc: 0.8200 - val_loss: 0.3352 - val_acc: 0.8894
+#&gt;Epoch 00001: val_acc improved from -inf to 0.88936, saving model to model1-cnn.01-0.8894.hdf5
+#&gt;Epoch: 2/120 - loss: 0.2648 - acc: 0.9129 - val_loss: 0.3068 - val_acc: 0.9038
+#&gt;Epoch 00002: val_acc improved from 0.88936 to 0.90379, saving model to model1-cnn.02-0.9038.hdf5
+#&gt;Epoch: 3/120 - loss: 0.1730 - acc: 0.9440 - val_loss: 0.3354 - val_acc: 0.8957
+#&gt;Epoch: 4/120 - loss: 0.1150 - acc: 0.9626 - val_loss: 0.3594 - val_acc: 0.8980</code></pre>
+
+
+<p>Validation accuracy quickly reached maximum at 90.38% by the second epoch, and started overfitting to the training data after that, even with dropout layers.</p>
+<p><strong><u>Model 2:</u></strong></p>
+<p>Let's change the model and see if we can get any better score,  this time we'll use a different CNN architecture similar to the one used in this <a href="https://arxiv.org/abs/1510.03820">paper</a> [1], also explained in this <a href="https://towardsdatascience.com/understanding-how-convolutional-neural-network-cnn-perform-text-classification-with-word-d2ee64b9dd0b">article</a> [2].</p>
+<figure>
+  <img src="https://image.ibb.co/cGRoUH/151003820.png" style="width:100%">
+  <figcaption><u>Fig.1:</u> (taken from [1]) Illustration of a similar CNN architecture for sentence classification. In our case, we use different parameters, and the last layer will have 7 possible outputs instead of binary classification.
+ </figcaption>
+</figure>
+
+<p>We'll also use a pre-trained word2vec model for the embedding layer.</p>
+<pre class="highlight"><code class="language-python">embeddings_index = Word2Vec.load('articles-w2v').wv
+word_index = tokenizer.word_index
+embedding_matrix = np.zeros((len(word_index) + 1, EMBEDDING_DIMS))
+for word, i in word_index.items():
+    if word in embeddings_index.vocab:
+        embedding_vector = embeddings_index[word]
+        embedding_matrix[i] = embedding_vector
+
+embedding_layer = Embedding(len(word_index) + 1,
+                            EMBEDDING_DIMS,
+                            weights=[embedding_matrix],
+                            input_length=MAX_SEQUENCE_LENGTH,
+                            trainable=False)</code></pre>
+
+
+<p><br style="display:none"></p>
+<pre class="highlight"><code class="language-python">model_no = 2
+inputs = []
+outputs = []
+for kernel_size in [3, 4, 5]:
+    in_model = Sequential()
+    in_model.add(Embedding(len(word_index) + 1,
+                      EMBEDDING_DIM,
+                      weights=[embedding_matrix],
+                      input_length=MAX_SEQUENCE_LENGTH,
+                      trainable=False, ))
+    in_model.add(Conv1D(128,
+                   kernel_size,
+                   padding='valid',
+                   activation='relu',
+                   strides=1))
+    in_model.add(GlobalMaxPooling1D())
+
+    input = Input(shape=(MAX_SEQUENCE_LENGTH,))
+    output = in_model(input)
+    inputs.append(input)
+    outputs.append(output)
+
+x = concatenate(outputs)  # concatenate the outputs of the in_models
+x = Dense(128, activation='relu')(x)
+x = Dropout(0.5)(x)
+x = Dense(128, activation='relu')(x)
+preds = Dense(len(labels_ids), activation='softmax')(x)
+
+model = Model(inputs=inputs, outputs=preds)
+
+model.compile(loss='categorical_crossentropy',
+              optimizer='adam',
+              metrics=['accuracy'])</code></pre>
+
+
+<figure>
+  <img src="https://image.ibb.co/hcZvdc/cnn_model.png" style="width:100%">
+  <figcaption><u>Fig.2:</u> Summary of CNN Model.2 with multiple input layers.</figcaption>
+</figure>
+
+<p>Note: since this model has three input layers (Figure #2), we have to pass the training/validation data to each one of these layers.</p>
+<pre class="highlight"><code class="language-python">model.fit([x_train, x_train, x_train],
+      y_train,
+      batch_size=BATCH_SIZE,
+      epochs=120,
+      validation_data=([x_val, x_val, x_val], y_val),
+      callbacks=callbacks)</code></pre>
+
+
+<p><br style="display:none"></p>
+<pre class="highlight"><code class="language-text">#&gt; ..
+#&gt;Epoch: 88/120 - loss: 0.15213 - acc: 0.94797 - val_loss: 0.25313 - val_acc: 0.92279
+#&gt;Epoch: 89/120 - loss: 0.15133 - acc: 0.94853 - val_loss: 0.26101 - val_acc: 0.92221
+#&gt;Epoch: 90/120 - loss: 0.14733 - acc: 0.95069 - val_loss: 0.26325 - val_acc: 0.92471
+#&gt;Epoch 00090: val_acc improved from 0.92286 to 0.92471, saving model to model2-cnn.90-0.92471.hdf5
+#&gt;Epoch: 91/120 - loss: 0.14655 - acc: 0.94909 - val_loss: 0.26624 - val_acc: 0.92093
+#&gt;Epoch: 92/120 - loss: 0.14662 - acc: 0.95010 - val_loss: 0.25883 - val_acc: 0.92300
+#&gt;..</code></pre>
+
+
+<p>The maximum accuracy achieved was 92.47%, an improvement over the first model. The training took about 80 minutes for 110 epochs (early stopping triggered).
+Unlike the first model the training became much slower with the addition of the pre-trained embedding layer, the accuracy steadily increased over time, and the loss was more resistant to overfitting.</p>
+<h2 id="predictpy">predict.py</h2>
+<p>So now that we trained our network and saved the one with the best score. Let's test it, create a file named: 'predict.py':</p>
+<pre class="highlight"><code class="language-python">from keras.models import load_model
+from keras.preprocessing.sequence import pad_sequences
+import pandas as pd
+import pickle
+
+TOKENIZER_FILE = 'tokenizer.pkl'
+TEST_FILE = 'test_set.csv'
+MAX_SEQUENCE_LENGTH = 300
+
+# same order used produced by labels_ids in train.py:
+labels_ids = {
+    0: 'business',
+    1: 'sci-tech',
+    2: 'variety',
+    3: 'sports',
+    4: 'health-medicine',
+    5: 'news',
+    6: 'culture-art',
+}
+
+#  convert back from binary matrix to text:
+def predicted_class(preds):
+    pred_id = preds.index(max(preds))
+    return labels_ids.get(int(pred_id))</code></pre>
+
+
+<p>I used a new set of articles not found in the training/validation sets (the model never seen it before),</p>
+<pre class="highlight"><code class="language-python">texts = []
+with open(TEST_FILE, encoding='utf-8', newline='') as test_file:
+    for line in test_file:
+        texts.append(line.strip())
+
+with open(TOKENIZER_FILE, 'rb') as f:
+    tokenizer = pickle.load(f)
+
+sequences = tokenizer.texts_to_sequences(texts)
+data = pad_sequences(sequences, maxlen=MAX_SEQUENCE_LENGTH)</code></pre>
+
+
+<p>Now let's load the trained keras model that we just saved, </p>
+<pre class="highlight"><code class="language-python">model = load_model('model2-cnn.90-0.92471.hdf5')</code></pre>
+
+
+<p>We are using the second model with multiple input layers, so we should also pass the data to all three of these layers:</p>
+<pre class="highlight"><code class="language-python">predictions = model.predict([data, data, data])
+
+# print the results:
+for i, article in enumerate(texts):
+    print(article[:200], '...')
+    print(predictions[i])
+    print(predicted_class(list(predictions[i])), '\n')</code></pre>
+
+
+<p><br style="display:none"></p>
+<pre class="highlight"><code class="language-text">#&gt;قلب ريال مدريد الإسباني تأخره بهدف إلى الفوز بهدفين على سبورتينج لشبونة البرتغالي في المباراة ...
+#&gt;['0.00', '0.00', '0.00', '1.00', '0.00', '0.00', '0.00']
+#&gt;sports
+#&gt;
+#&gt;كشف برنامج الغذاء العالمي التابع للأمم المتحدة أن الأيام المقبلة ستشهد إدخال المساعدات الإنسانية...
+#&gt;['0.00', '0.00', '0.00', '0.00', '0.00', '1.00', '0.00']
+#&gt;news
+#&gt;
+#&gt;أكدت الفيدرالية الدولية لحقوق الإنسان في تقرير الأربعاء أن خمس مؤسسات مالية فرنسية هي أربعة مصارف..
+#&gt;['0.87', '0.00', '0.00', '0.00', '0.01', '0.11', '0.01']
+#&gt;business
+#&gt;
+#&gt;تحدث الأرجنتيني ليونيل ميسي هداف برشلونة التاريخي حول رحيل نيمار إلى باريس سان جيرمان وقدرة ...
+#&gt;['0.00', '0.00', '0.00', '1.00', '0.00', '0.00', '0.00']
+#&gt;sports
+#&gt;
+#&gt;حذر صندوق الأمم المتحدة للطفولة (اليونيسف) أمس الاثنين العالم من تعرض ثلاثة ملايين طفل ما بين لاجئ ...
+#&gt;['0.00', '0.01', '0.01', '0.00', '0.01', '0.97', '0.00']
+#&gt;news
+#&gt;
+#&gt;عندما تصل درجات الحرارة لأكثر من 40 درجة مئوية ينصح الأطباء بتناول ما لا يقل عن 12 كوبا من المياه ...
+#&gt;['0.00', '0.00', '0.00', '0.00', '1.00', '0.00', '0.00']
+#&gt;health-medicine
+#&gt;
+#&gt;ربما كانت الانتعاشة التي تعيشها السينما في الوقت الحالي دافعاً لدى البعض من أجل الإعلان مبكرا عن ...
+#&gt;['0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '1.00']
+#&gt;culture-art
+#&gt; 
+#&gt;...
+#&gt;...</code></pre>
+
+
+<p>The results seem accurate.  </p>
+<h2 id="references">References:</h2>
+<p>[1]: <a href="https://arxiv.org/abs/1510.03820">Ye Zhang and Byron Wallace “A Sensitivity Analysis of (and Practitioners' Guide to) Convolutional Neural Networks for Sentence Classification” arXiv:1510.03820 [cs.CL], Oct 2015.</a></p>
+<p>[2]: <a href="https://towardsdatascience.com/understanding-how-convolutional-neural-network-cnn-perform-text-classification-with-word-d2ee64b9dd0b">Understanding how Convolutional Neural Network (CNN) perform text classification with word embeddings</a></p>
+<h2 id="resources">Resources:</h2>
+<p><strong>Word2Vec, Embedding Layers:</strong></p>
+<ul>
+<li><a href="https://www.tensorflow.org/tutorials/word2vec">TensorFlow: Vector Representations of Words.</a></li>
+<li><a href="https://towardsdatascience.com/deep-learning-4-embedding-layers-f9a02d55ac12">Deep Learning #4: Why You Need to Start Using Embedding Layers.</a></li>
+<li><a href="https://badjah.net/arabic-word-embeddings-word2vec.html">Word2Vec Intro (in arabic).</a></li>
+</ul>
+<p><strong>Convolutional Neural Networks:</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/1510.03820">Ye Zhang and Byron Wallace “A Sensitivity Analysis of (and Practitioners' Guide to) Convolutional Neural Networks for Sentence Classification” arXiv:1510.03820 [cs.CL], Oct 2015.</a></li>
+<li><a href="https://towardsdatascience.com/understanding-how-convolutional-neural-network-cnn-perform-text-classification-with-word-d2ee64b9dd0b">Understanding how Convolutional Neural Network (CNN) perform text classification with word embeddings</a></li>
+<li><a href="https://keras.io/layers/convolutional/">Convolutional Layers - Keras Documentation</a></li>
+<li><a href="https://github.com/keras-team/keras/blob/master/examples/pretrained_word_embeddings.py">An Official Keras example (Using 20 Newshroup DataSet and Glove Embeddings instead).</a></li>
+</ul>
+</div>
+</div>
+<script
+        src="https://code.jquery.com/jquery-3.3.1.min.js"
+        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+<script src="/ace-build/src-min-noconflict/ace.js" type="text/javascript" charset="utf-8"></script><style>td.linenos {
+    display: none;
+}
+
+pre {
+    box-sizing: content-box;
+    padding: 0;
+    border-radius: 0;
+}
+
+.ace_gutter-cell {
+    cursor: pointer;
+}
+
+.ace_layer {
+    height: 100% !important;
+}
+
+.ace-chrome .ace_marker-layer .ace_selection {
+    border-radius: 0;
+}
+
+span.o {
+    display: block;
+}</style><script>var ACE_EDITOR_SCROLL_TOP_MARGIN = 0;var ACE_EDITOR_THEME = 'monokai';var ACE_EDITOR_MAXLINES = 100;var ACE_EDITOR_READONLY = true;var ACE_EDITOR_AUTOSCROLL = true;var ACE_EDITOR_SHOW_INVISIBLE = false;var SHOW_GUTTER = true;var Range = ace.require("ace/range").Range;
+
+var editor_array = {};
+
+var correlationDic = {
+    'bash': 'sh'
+}
+
+// inspiration : https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt#A_stricter_parse_function
+filterInt = function (value) {
+  if(/^(\-|\+)?([0-9]+|Infinity)$/.test(value))
+    return Number(value);
+  return NaN;
+}
+
+function linesInAnchor(anchor) {
+  anchorObject = {};
+  anchorObject.first = 0;
+  anchorObject.last = 0;
+  anchorObject.anchor = "";
+  var firstLineIndex = anchor.indexOf("-L");
+  var firstResult = anchor.substring(
+    firstLineIndex + 2
+  );
+  if(filterInt(firstResult)) {
+    anchorObject.first = filterInt(firstResult) - 1;
+    anchorObject.last = anchorObject.first;
+    anchorObject.anchor = anchor.substring(0, firstLineIndex + 2) + firstResult;
+    return anchorObject;
+  }
+  var secondLineIndex = firstResult.indexOf("-L");
+
+  if (!filterInt(firstResult.substring(0, secondLineIndex))) {
+    return anchorObject;
+  }
+  anchorObject.anchor = anchor.substring(0, firstLineIndex + 2) + firstResult.substring(0, secondLineIndex);
+
+  anchorObject.first = filterInt(firstResult.substring(0, secondLineIndex)) - 1;
+  var secondResult = firstResult.substring(
+    secondLineIndex + 2
+  );
+  if (!filterInt(secondResult)) {
+    anchorObject.last = anchorObject.first;
+    return anchorObject;
+  }
+  anchorObject.last = filterInt(secondResult) - 1;
+  return anchorObject;
+}
+
+var selectionCallback = function (event, editor) {
+    var editor_id = $(editor.container).attr('id');
+    var range = editor.selection.getRange();
+    location.hash = editor_id + '-L' + parseInt(range.start.row + 1);
+    if ($(editor.container).data().hasOwnProperty("id")) {
+        event.preventDefault();
+    }
+    else if (range.start.row != range.end.row) {
+        location.hash += '-L' + parseInt(range.end.row + 1);
+    }
+    $(editor.container).removeData();
+};
+
+$(function() {
+    var $pre_filter = $('pre.highlight');
+    var pre_len = $pre_filter.length;
+    $pre_filter.each(function(item) {
+        var lang = $(this).find("code").attr('class').substring(9);
+        if (lang in correlationDic) {
+            lang = correlationDic[lang];
+        }
+        var one_render = true;
+        var nb_of_lines = $(this).text().search('\n');
+        // avoid the last carriage return
+        $(this).text($(this).text().substring(0, $(this).text().length));
+
+        // Give a unique id on all editor
+        var editor_id = 'editor' + parseInt(item + 1);
+        $(this).attr('id', editor_id);
+        var editor = ace.edit(editor_id);
+        editor_array[editor_id] = editor;
+        editor.setTheme("ace/theme/" + ACE_EDITOR_THEME);
+        editor.setShowInvisibles(ACE_EDITOR_SHOW_INVISIBLE);
+        editor.setOptions({
+            mode: "ace/mode/" + lang,
+            maxLines: ACE_EDITOR_MAXLINES,
+            readOnly: ACE_EDITOR_READONLY,
+            autoScrollEditorIntoView: ACE_EDITOR_AUTOSCROLL
+        });
+        editor.$blockScrolling = Infinity;
+        if (nb_of_lines === -1) {
+            editor.renderer.setShowGutter(SHOW_GUTTER);
+        }
+
+        editor.renderer.on("afterRender", function(event) {
+            var anchor = linesInAnchor(location.hash);
+            var hash_editor = location.hash.substring(1, location.hash.indexOf("-"));
+            var line = $($(editor.container).find(".ace_gutter-cell")[parseInt(editor_id.substring(6))]);
+            if (hash_editor == editor_id && one_render) {
+                var offset = line.offset();
+                if (offset) {
+                    $(document).scrollTop(offset.top - ACE_EDITOR_SCROLL_TOP_MARGIN);
+                    editor.selection.setRange(new Range(
+                        anchor.first, 0, anchor.last,  Number.MAX_VALUE)
+                    );
+                    one_render = false;
+                }
+            }
+        });
+
+        editor.resize(true);
+        editor.selection.on("changeSelection", function(event) {
+            selectionCallback(event, editor);
+        });
+    });
+
+    $(".ace_gutter-cell").on("click", function(event) {
+        var editor_id = $(this).closest('pre.ace_editor').attr('id');
+        var editor = editor_array[editor_id];
+        var line = parseInt($(this).text()) - 1;
+        editor.selection.setRange(new Range(line, 0, line, Number.MAX_VALUE));
+        $(this).closest('.ace_editor').data({'id': parseInt($(this).text())});
+        selectionCallback(event, editor);
+    });
+});</script>
+<script type="text/javascript">
+    $(window).on('scroll', function () {
+        var pixs = $(document).scrollTop();
+        // console.log(pixs / 100);
+        // pixs = pixs / 100;
+        pixs = Math.min((pixs / 100), 2.5);
+        $(".sidebar-sticky").css({"-webkit-filter": "blur(" + pixs + "px)", "filter": "blur(" + pixs + "px)"})
+    });
+</script>
+</body>
+</html>

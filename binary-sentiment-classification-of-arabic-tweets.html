@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="english">
+<head>
+    <link href="http://gmpg.org/xfn/11" rel="profile">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+    <!-- Enable responsiveness on mobile devices-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+
+    <title>Moh Badjah | Blog</title>
+
+    <!-- CSS -->
+    <link href="//fonts.googleapis.com/" rel="dns-prefetch">
+    <link href="//fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic|Abril+Fatface|PT+Sans:400,400italic,700&amp;subset=latin,latin-ext"
+          rel="stylesheet">
+
+    <link rel="stylesheet" href="/theme/css/poole.css"/>
+    <link rel="stylesheet" href="/theme/css/hyde.css"/>
+    <link rel="stylesheet" href="/theme/css/syntax.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <!-- RSS -->
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="/atom.xml">
+</head>
+
+<body class="theme-base-0d">
+<div class="sidebar">
+    <div class="container top-menu">
+        <img class="logo" src="/theme/images/logo-w.png">
+    </div>
+    <div class="container sidebar-sticky">
+        <div class="sidebar-about">
+
+            <h1>
+                <a href="/">
+                    <img class="profile-picture" src="/theme/images/mb-author-pn38y1s5.png">
+                    Moh.B
+                </a>
+            </h1>
+            <p class="lead"></p>
+            <p class="lead">My name's Mohamed Badjah. I mostly ramble here about python and programing in general .. ex: Mechanical Engineer </p>
+            <p></p>
+        </div>
+        <nav class="sidebar-nav">
+            <a class="sidebar-nav-item" href="mailto:moh@badjah.net">
+                <i class="fa fa-at"></i>
+            </a>
+            <a class="sidebar-nav-item" href="https://github.com/badjio">
+                <i class="fa fa-github"></i>
+            </a>
+        </nav>
+    </div>
+</div><div class="content container">
+<div class="post"  >
+	<h1 class="post-title">Binary Sentiment Classification Of Arabic Tweets.</h1>
+	<span class="post-date">Sat 16 June 2018</span>
+	<h2 id="abstract">Abstract:</h2>
+<p>In this post, I'll go through my attempt of building a neural network for binary classification of arabic tweets
+sentiments (positive/negative). Starting by how I collected a dataset of 9 million labeled tweets, then using it train an RNN
+ model that achieved an accuracy of 84%.</p>
+<h2 id="data">Data:</h2>
+<p>As opposed to Stanford's <a href="http://help.sentiment140.com/for-students/">sentiment140</a> dataset for labeled english tweets, there is no equivalent for arabic tweets,
+so I had to either build the dataset myself, by manually labeling it, which is time consuming and won't be nearly enough
+to train a neural network with, or use mturk crowd-sourcing marketplace, but the cost will be very high for a decently large dataset.</p>
+<p>I came across an interesting approach used in this <a href="https://gab41.lab41.org/classifying-arabic-sentiment-like-a-%D9%86%D8%A7%D8%B7%D9%82-%D8%A8%D9%87%D8%A7-%D9%83%D9%84%D8%BA%D8%AA%D9%83-%D8%A7%D9%84%D8%A3%D9%85-308682ee73ec">article</a>, 
+the authors labeled tweets containing emoticons/emojis based on the emoji's emotional content, e.g: 😀 indicates a positive sentiment and the opposite for 😒.</p>
+<p>It was a good starting point, so tried it myself and collected around 4.3 million arabic tweet containing specific emojis, and used it to train an RNN (LSTM) model, 
+it reached a maximum validation accuracy of 78%, however, after testing it on a collection of manually labeled tweets [3][4][5], the score dropped to 71%,
+with some inspection of the training data, one reason for the drop in performance was clear: <strong>sarcasm</strong>,
+many tweets with positive emojis were obviously negative in their sentiment, thus resulting in a poorly labeled dataset.</p>
+<pre class="highlight"><code class="language-text"># Examples of sarcastic tweets with negative sentiment and a positive emoji,
+اكتشفت انو العلم ممكن يكون نِقمة 😂 اليوم الدكتور عصب مني ويقول اسوأ انواع المرضى طلاب الطب والصيدلة
+منطق النائب وفكره يدرسان كأسوأ مثال على احترام حقوق الآخرين والدفاع عن هذه الحقوق. سعادتك تفوقت على ذاتك 👍
+#ملخص٢٠١٧  سنة كئيبة بكل تفاصيلها 👌
+يوم كئيب كالعادة  Gnight ☺
+اوك نعارض اشياء بالمعقول بس اني اخذ اهلي واوديهم الملعب !! سلامات وين عايشين 😂</code></pre>
+
+
+<p>So I had to try another approach, I found one more interesting <a href="https://zablo.net/blog/post/twitter-sentiment-analysis-python-scikit-word2vec-nltk-xgboost">post</a> where the author assigned for the labels: positive, negative and neutral,
+the words: 'good', 'bad' and 'information, respectively. And used the similarity between the embedding vectors of these expressive words
+with the mean vectors of the words for every tweet.</p>
+<h3 id="packages">Packages:</h3>
+<pre class="highlight"><code class="language-python">import pandas as pd
+from gensim.models import Word2Vec, TfidfModel
+from gensim import corpora
+import numpy as np
+import multiprocessing as mp
+from time import sleep
+import os
+import pickle
+import logging
+
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+
+ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
+DATA_DIR = os.path.join(ROOT_DIR, 'data')
+DATASET_FILE = os.path.join(DATA_DIR, 'dataset.csv')</code></pre>
+
+
+<h3 id="pre-processing">Pre-Processing:</h3>
+<p>These are the steps I applied to filter out the noise and clean the tweets:</p>
+<p><strong>Initial requirements:</strong></p>
+<p><strong>1.</strong> Skip any tweet with (hashtags &gt; 3), (urls &gt; 1).</p>
+<p><strong>2.</strong> Skip any tweet with a phone number, these are usually ads and have no sentimental value, same as the previous point.</p>
+<p><strong>Cleaning process:</strong></p>
+<p><strong>3.</strong> Remove hashtags, retweets, mentions and urls.</p>
+<p><strong>4.</strong> Remove <em>tashkil</em> (is sometimes used to help with correct pronunciation of words)</p>
+<p><strong>5.</strong> Remove <em>madd</em> (stretching of words e.g. المدرسة -- same as --&gt; المـــدرســة)</p>
+<p><strong>6.</strong> Apply filter function to keep letters+whitespaces only (arabic + latin letters).</p>
+<p><strong>7.</strong> Tokenize by whitespaces.</p>
+<p><strong>8.</strong> Remove duplicate, trim to two letters for anything repeated more .e.g: 'هه' &lt;- 'ههههههههههه'</p>
+<p><strong>9.</strong> Replace variations of <em>hamza</em> (أ،آ،إ) with the base <em>hamza</em> (ا) at the start of the words.</p>
+<p><strong>10.</strong> Replace <em>taa</em> (ة) letter at the end of words with <em>haa</em> (ه) (in 99% of the cases they are interchangeable and keep the same meaning of the word).</p>
+<p><strong>11.</strong> Avg ratio of words_count/letter_count was 0.19, by filtering out the tweets outside the limits (I found the optimal min/max at: 0.13/0.36), this eliminates a lot of the noise, such as the examples below:</p>
+<pre class="highlight"><code class="language-text">### below the limit:
+ظ ل مت وما الى ل نفس ك يافتى ظ ل مت وظ لم النفس م ن اقبح الوصف
+في غيبت ك يا ش وق ق لبي ي د عي ان ه قو ي وإن الول ه ما ي وجع ه
+اذا خ س رت ش خ ص لأن ك واجهته بالص رآحه فأن ت الرآب ح ف العق و ل الص غ ي ره لآ تت قب ل الحق يقه وت رض ا بالم جامله
+### above the limit:
+هي استمرارل11فبراير ماتغيرت جزءمنهاطردوالجزءالاخراستولاعلى البلاد وهاهم اليوم يحتفلوبنفس المناسبه الطاردوالمطرود
+يتيتيتنينينيسننيتستييووسسوسو يوم مارحت شغلوه اكرهني
+تعليمجده وزارةالتعليم اعلامنافيقلبالحدث تعليقالدراسه نظرا للتوقعات ال</code></pre>
+
+
+<figure style="text-align: center;">
+  <img src="https://image.ibb.co/bNMkTT/lc_wc_fig.png" style="display: block;margin-left: auto;margin-right: auto;">
+  <figcaption><u>Figure[1]:</u> word_count / letter_count of the tweets. </figcaption>
+</figure>
+
+<p><strong>12.</strong> Discard any tweet with a length less than 16 characters.
+<strong>13.</strong> Remove duplicates.</p>
+<p>After cleaning the data, I was left with 31 million tweets (from 86 mil), which was enough to continue to the next step.</p>
+<h3 id="building-word2vec-embeddings">Building Word2Vec Embeddings:</h3>
+<p>I used gensim's <a href="https://radimrehurek.com/gensim/models/word2vec.html">Word2vec</a> implementation to train a model on the dataset.</p>
+<pre class="highlight"><code class="language-python">class Sentences(object):
+def __init__(self, dirname):
+    self.dirname = dirname
+
+def __iter__(self):
+    for fname in os.listdir(self.dirname)[:1]:
+        for row in open(os.path.join(self.dirname, fname), encoding='utf-8'):
+            yield row.split()
+
+
+sentences = Sentences(DATA_DIR)
+
+w2v_model = Word2Vec(sentences, min_count=10, size=300, workers=multiprocessing.cpu_count(), iter=15, window=8)
+w2v_model.save(os.path.join(DATA_DIR, 'arabic-tweets.w2v'))
+
+# let's test it by trying the commmon example: 
+# king - man + woman = (queen)
+# in arabic:
+# ملك - رجل + امرأه = ملكه
+print(model.wv.most_similar(positive=['امرأه', 'ملك'], negative=['رجل'], topn=1))
+# [('ملكه', 0.5649329423904419)]</code></pre>
+
+
+<h3 id="building-labeled-dataset">Building Labeled Dataset:</h3>
+<p>I did something similar to the <a href="https://zablo.net/blog/post/twitter-sentiment-analysis-python-scikit-word2vec-nltk-xgboost">post</a> mentioned above, but instead of focusing on a single word for each label, and since arabic 
+language has many dialects (&gt; 10) and there are many words to express 'good' or 'bad'. I collected
+two lists of words that usually tend to appear exclusively in tweets with either one of these sentiments (pos/neg). 
+Some of these words were chosen from the dictionary of the most frequent terms in this dataset,
+and the rest from inspecting some samples, by the end I collected ~260 terms for each label.</p>
+<p>Next, to build the 'extremely polarized' vectors to compare the tweets to, I tried few combinations.
+And ended up taking the average vector of 5 random words, and repeated this step 100 times (for each list).</p>
+<pre class="highlight"><code class="language-python">pos_tokens = ['مبروك', 'جميل', 'الحب', 'احلى', 'موافق', 'رائع', 'اسطوره', '...', '...']  # total: 271
+neg_tokens = ['مشكله', 'حرام', 'اسوء', 'للاسف', 'مؤلم', 'عيب', 'مصيبه', '...', '...']  # total: 252
+
+# get avearage vector of tokens:
+def average_vector(tokens):
+    vecs = []
+    for tk in tokens:
+        try:
+            vecs.append(w2v_model[tk])
+        except KeyError:
+            continue
+    return np.average(vecs, axis=0)
+
+# build the vectors:
+pos_vecs_list = []
+neg_vecs_list = []
+
+for i in range(0, 100):
+    pos_vecs_list.append(doc_vec_avg(random.sample(pos_tokens, 5)))
+    neg_vecs_list.append(doc_vec_avg(random.sample(neg_tokens, 5)))
+
+extremes_vecs  = np.array([pos_vecs_list, neg_vecs_list]) 
+np.save('extremes_vecs.npy', extremes_vecs)
+print(extremes_vecs.shape)
+# (2, 100, 300)
+#</code></pre>
+
+
+<p>For obtaining the tweets vectors, I used the <a href="https://en.wikipedia.org/wiki/Tf%E2%80%93idf">If-idf</a> weighting (term frequency-inverse document frequency),
+it gives more weight to unique terms, and the contrary for more frequent terms like stop words,
+hence very helpful for producing a single meaningful vector for a whole sentence.</p>
+<figure style="text-align: center;">
+  <img src="https://image.ibb.co/mOww08/tfidf.png" style="display: block;margin-left: auto;margin-right: auto;">
+  <figcaption><u>Figure[2]:</u> TFIDF Formula: i: stands for the term (word), j: for the document (sentence) </figcaption>
+</figure>
+
+<p>I used gensim's TfidfModel,</p>
+<pre class="highlight"><code class="language-python">def documents():
+    for line in open(os.path.join(DATA_DIR, DATASET_FILE), encoding='utf-8'):
+        yield [word for word in line.lower().split() if word not in stoplist]
+
+def corpus_bow(dictionary):
+    for line in open(os.path.join(DATA_DIR, DATASET_FILE), encoding='utf-8'):
+        yield dictionary.doc2bow(line.lower().split())
+
+# maps the words to ids
+dictionary = corpora.Dictionary(documents(), prune_at=None)
+# dictionary.save(os.path.join(DATA_DIR, 'dictionary'))
+
+# Convert the tweets into bag-of-words representation using the dictionary built [(token_id, token_count)]
+corpus = corpus_bow(dictionary)
+
+tfidf = models.TfidfModel(corpus)
+# tfidf.save('tfidf')</code></pre>
+
+
+<p>I used the multiprocessing module to speed up the comparison of tweets with the extremes vectors,
+it took 68 minutes on an AWS m4.4xlarge instance (16 vcores) to finish 31 million tweets:</p>
+<pre class="highlight"><code class="language-python">def doc_vec_tfidf(tokens):
+    vecs = []
+    bow_str = dictionary.doc2bow(tokens)
+    for key, value in tfidf[bow_str]:
+        try:
+            vecs.append(w2v_model[dictionary[key]] * value)
+        except KeyError:
+            continue
+    return np.average(vecs, axis=0)
+
+# get tweets from queue, calc cosine similarity with extremes_vecs:
+# sum_sims.shape: (2,) : [&lt;sum_pos_similarities&gt;, &lt;sum_neg_similarities&gt;]
+def worker(q, results):
+    while True:
+        text = q.get()
+        if text is None:
+            break
+        try:
+            text = text.strip()
+            tweet_vec = doc_vec_tfidf(text.split())
+            cos_sims = np.inner(extremes_vecs, tweet_vec) / (
+                    np.linalg.norm(extremes_vecs, axis=-1) * np.linalg.norm(tweet_vec))
+            sum_sims = np.sum(cos_sims, axis=1)
+            results.append(np.append(sum_sims, text))
+        except ValueError:
+            pass
+
+if __name__ == '__main__':
+    q = mp.Queue(maxsize=mp.cpu_count() * 3)
+    manager = mp.Manager()
+    # create a shared list to contain the results:
+    results = manager.list()
+
+    pool = mp.Pool(mp.cpu_count(), initializer=worker, initargs=(q, results))
+
+    # add the tweets to the queue:
+    for tweet in tqdm(open(dataset_path, encoding='utf-8', newline='')):
+        q.put(tweet)
+    for _ in range(mp.cpu_count()):
+        q.put(None)
+
+    while not q.empty():
+        print('..')
+        sleep(1)
+
+    # normalize and save results to csv file:
+    df = pd.DataFrame(list(results), columns=['pos', 'neg', 'ntr', 'tweet'])
+
+    cols = ['pos', 'neg', ]
+    df[cols] = df[cols] / 100  # normalize values to range between -1 and 1
+
+    # or use z-score, different values from the above but same order when sorted (check below).
+    # df[cols] = (df[cols] - df[cols].mean()) / df[cols].std()
+
+    df.to_csv(os.path.join(DATA_DIR, 'dataset-annotated.csv'), encoding='utf-8', sep=',', index=False)
+
+    pool.close()
+    pool.join()</code></pre>
+
+
+<p>Let's check few examples from the annotated dataset,</p>
+<h4 id="positive">Positive:</h4>
+<pre class="highlight"><code class="language-python">df = pd.read_csv(os.path.join(DATA_DIR, 'dataset-annotated.csv'), sep=',', encoding='utf-8', names=['pos', 'neg', 'tweet'])
+pd.set_option('display.max_columns', None)
+df = df.sample(10 * 5)
+
+# positive tweets:
+df = df.sort_values('pos', ascending=False)
+print(df[['tweet', 'pos', 'neg', ]].head(6))</code></pre>
+
+
+<table>
+<thead>
+<tr>
+<th align="right">tweet</th>
+<th align="center">pos</th>
+<th align="center">neg</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="right">يبارك فيك استاذي وان شاء الله تستمر هذه الروح ...</td>
+<td align="center"><code>0.321391</code></td>
+<td align="center">-0.156594</td>
+</tr>
+<tr>
+<td align="right">الف الف مبروك ي مبدع</td>
+<td align="center"><code>0.319654</code></td>
+<td align="center">-0.064869</td>
+</tr>
+<tr>
+<td align="right">اقسم بالله انسان رائع فخوره جدا بأن هناك عينه ...</td>
+<td align="center"><code>0.317181</code></td>
+<td align="center">-0.032070</td>
+</tr>
+<tr>
+<td align="right">نور كانت اليوم صوت رائع وآداء متميز</td>
+<td align="center"><code>0.313377</code></td>
+<td align="center">-0.086746</td>
+</tr>
+<tr>
+<td align="right">موفق يارب ومن تميز لتميز ان شاء الله فعلا تعلم...</td>
+<td align="center"><code>0.312325</code></td>
+<td align="center">-0.110048</td>
+</tr>
+<tr>
+<td align="right">تستأهل يا بطل القادم اجمل الله يسعدك مثل ما اس...</td>
+<td align="center"><code>0.309962</code></td>
+<td align="center">-0.114805</td>
+</tr>
+</tbody>
+</table>
+<h4 id="negative">Negative:</h4>
+<pre class="highlight"><code class="language-python"># negative tweets:
+df = df.sort_values('neg', ascending=False)
+print(df[['tweet', 'pos', 'neg', ]].head(6))</code></pre>
+
+
+<table>
+<thead>
+<tr>
+<th align="right">tweet</th>
+<th align="center">pos</th>
+<th align="center">neg</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="right">مدري تحت اي كلمه تصنفه قله ادب ولا عدم مبالاه ...</td>
+<td align="center">-0.004075</td>
+<td align="center"><code>0.319328</code></td>
+</tr>
+<tr>
+<td align="right">شي مقرف ماعندهم مشكله يتقاربو من اي شخص</td>
+<td align="center">0.021630</td>
+<td align="center"><code>0.312338</code></td>
+</tr>
+<tr>
+<td align="right">اوكي انا من قبل فعلا مو مقتنع فيه بس الآن فعلا...</td>
+<td align="center">0.082241</td>
+<td align="center"><code>0.306755</code></td>
+</tr>
+<tr>
+<td align="right">اكره شيء لما تكون زعلان محد يعرف انك زعلان يعن...</td>
+<td align="center">0.072323</td>
+<td align="center"><code>0.299979</code></td>
+</tr>
+<tr>
+<td align="right">من المؤسف ان نشوف هذا تطور وهو اصلا تصرف طبيعي...</td>
+<td align="center">0.061014</td>
+<td align="center"><code>0.294402</code></td>
+</tr>
+<tr>
+<td align="right">مافي فلوس ي غبي افهم</td>
+<td align="center">-0.006504</td>
+<td align="center"><code>0.291487</code></td>
+</tr>
+</tbody>
+</table>
+<p>Both sets of examples seem accurate, proceeding to the last step, I used some conditional statements to classify the tweets,
+based on their scores:</p>
+<pre class="highlight"><code class="language-python">positive_df = df[(df['pos'] &gt;= 0.15) &amp; (df['pos'] - df['neg'] &gt;= 0.15)]
+negative_df = df[(df['neg'] &gt;= 0.15) &amp; (df['neg'] - df['pos'] &gt;= 0.15)]</code></pre>
+
+
+<p>using the statements above, returned 4.5 million positive tweets, and 6.8 mil negative tweets.</p>
+<h2 id="training">Training:</h2>
+<p>Finally we have the labeled data, we can use it to train a neural network with,
+first prepare the data to pass it to the models:</p>
+<pre class="highlight"><code class="language-python">MAX_NB_WORDS = 500000
+MAX_SEQUENCE_LENGTH = 200
+EMBEDDING_DIM = 300
+BATCH_SIZE = 512
+VALIDATION_SPLIT = 0.2
+
+positive_tweets = positive_df['tweet'].to_list()
+negative_tweets = negative_df['tweet'].to_list()
+
+pos_labels = np.full(positive_df.shape[0], 1) # label 1 -&gt; positive
+neg_labels = np.full(negative_df.shape[0], 0) # label 0 -&gt; negative
+
+texts = positive_tweets + negative_tweets
+labels = np.concatenate([pos_labels, neg_labels])
+
+# build vocabulary of words with unique ids
+tokenizer = Tokenizer(num_words=MAX_NB_WORDS)
+# update vocabulary with tokens from texts:
+tokenizer.fit_on_texts(texts)
+# save tokenizer, to load later for predictions:
+with open(os.path.join(DATA_DIR, 'tokenizer.pickle'), &quot;wb&quot;) as file:
+    pickle.dump(tokenizer, file)
+
+word_index = tokenizer.word_index
+
+# convert text to squences of ids from vocabulary:
+sequences = tokenizer.texts_to_sequences(texts)
+
+# pad/truncate all the sequences to the same length:
+data = pad_sequences(sequences, maxlen=MAX_SEQUENCE_LENGTH)
+
+# convert labels to binary matrix representation, e.g: 0 -&gt; [1 0], 1 -&gt; [0 1]
+labels = to_categorical(labels)
+
+
+# shuffle:
+indices = np.arange(data.shape[0])
+np.random.shuffle(indices)
+data = data[indices]
+labels = labels[indices]
+
+# split the data into a training set and a validation set
+nb_validation_samples = int(VALIDATION_SPLIT * data.shape[0])
+x_train = data[:-nb_validation_samples]
+y_train = labels[:-nb_validation_samples]
+x_val = data[-nb_validation_samples:]
+y_val = labels[-nb_validation_samples:]
+
+# generate batches of data on the fly:
+class GenerateData(Sequence):
+
+    def __init__(self, x_set, y_set, batch_size):
+        self.x, self.y = x_set, y_set
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return int(np.ceil(len(self.x) / float(self.batch_size)))
+
+    def __getitem__(self, idx):
+        batch_x = self.x[idx * self.batch_size:(idx + 1) * self.batch_size]
+        batch_y = self.y[idx * self.batch_size:(idx + 1) * self.batch_size]
+        return batch_x, batch_y
+
+
+# use our pre-trained word2vec model as an embedding layer:
+embedding_matrix = np.zeros((len(word_index) + 1, EMBEDDING_DIM))
+for word, i in tqdm(word_index.items()):
+    if word in embeddings_index.vocab:
+        embedding_vector = embeddings_index[word]
+        embedding_matrix[i] = embedding_vector
+
+embedding_layer = Embedding(len(word_index) + 1,
+                            EMBEDDING_DIM,
+                            weights=[embedding_matrix],
+                            input_length=MAX_SEQUENCE_LENGTH,
+                            trainable=False)</code></pre>
+
+
+<p>I tried different models and parameters, the recurrent network below returned the best score,
+using the pre-trained w2v vectors as the embedding layer and a bidirectional LSTM layer:</p>
+<pre class="highlight"><code class="language-python">model = Sequential()
+model.add(embedding_layer)
+model.add(Bidirectional(LSTM(256, return_sequences=True)))
+model.add(TimeDistributed(Dense(128)))
+model.add(Dropout(0.5))
+model.add(Dense(64, activation='relu'))
+model.add(Dropout(0.3))
+model.add(Flatten())
+model.add(Dense(2, activation='sigmoid'))</code></pre>
+
+
+<p>setup few callbacks:</p>
+<pre class="highlight"><code class="language-python"># save the model if a higher accuracy achieved.
+cp_name = 'bi-lstm.{epoch:02d}-{val_f1:.4f}.hdf5'
+checkpoint = ModelCheckpoint(cp_name, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+
+# save the logs to a file.
+csv_logger = CSVLogger('training.log')
+
+# stop the training if the accuracy doesn't improve (patience of 20 epchs)
+early_stopping = EarlyStopping(monitor='val_f1', patience=20)
+
+callbacks = [checkpoint, csv_logger, early_stopping]</code></pre>
+
+
+<p>compile and start the training,</p>
+<pre class="highlight"><code class="language-python">generate_data = GenerateData(x_train, y_train, BATCH_SIZE)
+
+model.compile(loss='binary_crossentropy',
+              optimizer='adam',
+              metrics=['accuracy', f1]) # I added f1 score to the metrics
+
+model.fit_generator(generate_data,
+                    validation_data=(x_val, y_val),
+                    steps_per_epoch=int((total_samples / BATCH_SIZE) / 2), # iterate half the data per epoch
+                    epochs=100,
+                    callbacks=callbacks,
+                    use_multiprocessing=True)</code></pre>
+
+
+<h2 id="results">Results:</h2>
+<p>All the models I've tested performed very well, reaching upwards of 95% validation accuracy on the first few epochs, 
+even without the embedding layer, and with multiple dropouts..this maybe due to the fact that the dataset mostly contains extremely polarized tweets.
+So the important question now is: how well will it perform on other datasets?</p>
+<p>Hence to get more meaningful results, I used different data for validation,
+a collection of 4400 manually labeled tweets from different sources [3][4][5].
+ The best accuracy; obtained by the model above at 83.89%
+which is quite good for a twitter sentiment classification problem.</p>
+<h2 id="whats-next">What's Next:</h2>
+<ul>
+<li>Repeat the same process to obtain neutral tweets. (already done it, the results are quite similar, will probably post it in a second part.)</li>
+<li>Split the neutral dataset into two parts, one contains the ads and spam tweets, the other news, information and questions..
+, the first class is just noise that negatively affects the performance, while the latter adds sentimental value.</li>
+<li>Combine the vectors comparison method with the neural network model for the final predictions.</li>
+<li>Try with other pre-trained word embeddings, (e.g. fastText, GoogleNews-vectors ).
+Though, I tried another model that I trained on 1.9 million arabic news article, it performed lower than the one trained on tweets.</li>
+</ul>
+<h2 id="references">References:</h2>
+<p>[1] <a href="https://gab41.lab41.org/classifying-arabic-sentiment-like-a-%D9%86%D8%A7%D8%B7%D9%82-%D8%A8%D9%87%D8%A7-%D9%83%D9%84%D8%BA%D8%AA%D9%83-%D8%A7%D9%84%D8%A3%D9%85-308682ee73ec">Kyle Foster, Gab41. Classifying Arabic Sentiment Like a ناطق بها كلغتك الأم</a></p>
+<p>[2] <a href="https://zablo.net/blog/post/twitter-sentiment-analysis-python-scikit-word2vec-nltk-xgboost">Marcin Zabłocki. Sentiment Analysis Of Tweets With Python, NLTK, Word2Vec &amp; Scikit-Learn.</a></p>
+<p>[3] <a href="https://archive.ics.uci.edu/ml/datasets/Twitter+Data+set+for+Arabic+Sentiment+Analysis">N. A. Abdulla, UCI. Twitter Data set for Arabic Sentiment Analysis Data Set.</a></p>
+<p>[4] <a href="http://www.mohamedaly.info/datasets/astd">Mahmoud Nabil, Mohamed Aly, and Amir Atiya. ASTD: Arabic Sentiment Tweets Dataset</a></p>
+<p>[5] <a href="https://researchportal.hw.ac.uk/en/datasets/arabic-gold-standard-twitter-data-for-sentiment-analysis">Eshrag Refaee, Verena Rieser. Arabic Gold Standard Twitter Data for Sentiment Analysis.</a> <em>Note: I used only part of the dataset, as it contains broken text (all faa 'ف' letters replaced by taa 'ت')</em> </p>
+</div>
+</div>
+<script
+        src="https://code.jquery.com/jquery-3.3.1.min.js"
+        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+<script src="/ace-build/src-min-noconflict/ace.js" type="text/javascript" charset="utf-8"></script><style>td.linenos {
+    display: none;
+}
+
+pre {
+    box-sizing: content-box;
+    padding: 0;
+    border-radius: 0;
+}
+
+.ace_gutter-cell {
+    cursor: pointer;
+}
+
+.ace_layer {
+    height: 100% !important;
+}
+
+.ace-chrome .ace_marker-layer .ace_selection {
+    border-radius: 0;
+}
+
+span.o {
+    display: block;
+}</style><script>var ACE_EDITOR_SCROLL_TOP_MARGIN = 0;var ACE_EDITOR_THEME = 'monokai';var ACE_EDITOR_MAXLINES = 100;var ACE_EDITOR_READONLY = true;var ACE_EDITOR_AUTOSCROLL = true;var ACE_EDITOR_SHOW_INVISIBLE = false;var SHOW_GUTTER = true;var Range = ace.require("ace/range").Range;
+
+var editor_array = {};
+
+var correlationDic = {
+    'bash': 'sh'
+}
+
+// inspiration : https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt#A_stricter_parse_function
+filterInt = function (value) {
+  if(/^(\-|\+)?([0-9]+|Infinity)$/.test(value))
+    return Number(value);
+  return NaN;
+}
+
+function linesInAnchor(anchor) {
+  anchorObject = {};
+  anchorObject.first = 0;
+  anchorObject.last = 0;
+  anchorObject.anchor = "";
+  var firstLineIndex = anchor.indexOf("-L");
+  var firstResult = anchor.substring(
+    firstLineIndex + 2
+  );
+  if(filterInt(firstResult)) {
+    anchorObject.first = filterInt(firstResult) - 1;
+    anchorObject.last = anchorObject.first;
+    anchorObject.anchor = anchor.substring(0, firstLineIndex + 2) + firstResult;
+    return anchorObject;
+  }
+  var secondLineIndex = firstResult.indexOf("-L");
+
+  if (!filterInt(firstResult.substring(0, secondLineIndex))) {
+    return anchorObject;
+  }
+  anchorObject.anchor = anchor.substring(0, firstLineIndex + 2) + firstResult.substring(0, secondLineIndex);
+
+  anchorObject.first = filterInt(firstResult.substring(0, secondLineIndex)) - 1;
+  var secondResult = firstResult.substring(
+    secondLineIndex + 2
+  );
+  if (!filterInt(secondResult)) {
+    anchorObject.last = anchorObject.first;
+    return anchorObject;
+  }
+  anchorObject.last = filterInt(secondResult) - 1;
+  return anchorObject;
+}
+
+var selectionCallback = function (event, editor) {
+    var editor_id = $(editor.container).attr('id');
+    var range = editor.selection.getRange();
+    location.hash = editor_id + '-L' + parseInt(range.start.row + 1);
+    if ($(editor.container).data().hasOwnProperty("id")) {
+        event.preventDefault();
+    }
+    else if (range.start.row != range.end.row) {
+        location.hash += '-L' + parseInt(range.end.row + 1);
+    }
+    $(editor.container).removeData();
+};
+
+$(function() {
+    var $pre_filter = $('pre.highlight');
+    var pre_len = $pre_filter.length;
+    $pre_filter.each(function(item) {
+        var lang = $(this).find("code").attr('class').substring(9);
+        if (lang in correlationDic) {
+            lang = correlationDic[lang];
+        }
+        var one_render = true;
+        var nb_of_lines = $(this).text().search('\n');
+        // avoid the last carriage return
+        $(this).text($(this).text().substring(0, $(this).text().length));
+
+        // Give a unique id on all editor
+        var editor_id = 'editor' + parseInt(item + 1);
+        $(this).attr('id', editor_id);
+        var editor = ace.edit(editor_id);
+        editor_array[editor_id] = editor;
+        editor.setTheme("ace/theme/" + ACE_EDITOR_THEME);
+        editor.setShowInvisibles(ACE_EDITOR_SHOW_INVISIBLE);
+        editor.setOptions({
+            mode: "ace/mode/" + lang,
+            maxLines: ACE_EDITOR_MAXLINES,
+            readOnly: ACE_EDITOR_READONLY,
+            autoScrollEditorIntoView: ACE_EDITOR_AUTOSCROLL
+        });
+        editor.$blockScrolling = Infinity;
+        if (nb_of_lines === -1) {
+            editor.renderer.setShowGutter(SHOW_GUTTER);
+        }
+
+        editor.renderer.on("afterRender", function(event) {
+            var anchor = linesInAnchor(location.hash);
+            var hash_editor = location.hash.substring(1, location.hash.indexOf("-"));
+            var line = $($(editor.container).find(".ace_gutter-cell")[parseInt(editor_id.substring(6))]);
+            if (hash_editor == editor_id && one_render) {
+                var offset = line.offset();
+                if (offset) {
+                    $(document).scrollTop(offset.top - ACE_EDITOR_SCROLL_TOP_MARGIN);
+                    editor.selection.setRange(new Range(
+                        anchor.first, 0, anchor.last,  Number.MAX_VALUE)
+                    );
+                    one_render = false;
+                }
+            }
+        });
+
+        editor.resize(true);
+        editor.selection.on("changeSelection", function(event) {
+            selectionCallback(event, editor);
+        });
+    });
+
+    $(".ace_gutter-cell").on("click", function(event) {
+        var editor_id = $(this).closest('pre.ace_editor').attr('id');
+        var editor = editor_array[editor_id];
+        var line = parseInt($(this).text()) - 1;
+        editor.selection.setRange(new Range(line, 0, line, Number.MAX_VALUE));
+        $(this).closest('.ace_editor').data({'id': parseInt($(this).text())});
+        selectionCallback(event, editor);
+    });
+});</script>
+<script type="text/javascript">
+    $(window).on('scroll', function () {
+        var pixs = $(document).scrollTop();
+        // console.log(pixs / 100);
+        // pixs = pixs / 100;
+        pixs = Math.min((pixs / 100), 2.5);
+        $(".sidebar-sticky").css({"-webkit-filter": "blur(" + pixs + "px)", "filter": "blur(" + pixs + "px)"})
+    });
+</script>
+</body>
+</html>

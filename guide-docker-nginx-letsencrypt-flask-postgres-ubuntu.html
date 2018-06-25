@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="english">
+<head>
+    <link href="http://gmpg.org/xfn/11" rel="profile">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+    <!-- Enable responsiveness on mobile devices-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+
+    <title>Moh Badjah | Blog</title>
+
+    <!-- CSS -->
+    <link href="//fonts.googleapis.com/" rel="dns-prefetch">
+    <link href="//fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic|Abril+Fatface|PT+Sans:400,400italic,700&amp;subset=latin,latin-ext"
+          rel="stylesheet">
+
+    <link rel="stylesheet" href="/theme/css/poole.css"/>
+    <link rel="stylesheet" href="/theme/css/hyde.css"/>
+    <link rel="stylesheet" href="/theme/css/syntax.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <!-- RSS -->
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="/atom.xml">
+</head>
+
+<body class="theme-base-0d">
+<div class="sidebar">
+    <div class="container top-menu">
+        <img class="logo" src="/theme/images/logo-w.png">
+    </div>
+    <div class="container sidebar-sticky">
+        <div class="sidebar-about">
+
+            <h1>
+                <a href="/">
+                    <img class="profile-picture" src="/theme/images/mb-author-pn38y1s5.png">
+                    Moh.B
+                </a>
+            </h1>
+            <p class="lead"></p>
+            <p class="lead">My name's Mohamed Badjah. I mostly ramble here about python and programing in general .. ex: Mechanical Engineer </p>
+            <p></p>
+        </div>
+        <nav class="sidebar-nav">
+            <a class="sidebar-nav-item" href="mailto:moh@badjah.net">
+                <i class="fa fa-at"></i>
+            </a>
+            <a class="sidebar-nav-item" href="https://github.com/badjio">
+                <i class="fa fa-github"></i>
+            </a>
+        </nav>
+    </div>
+</div><div class="content container">
+<div class="post"  >
+	<h1 class="post-title">Guide: Docker + Nginx + Letsencrypt + Flask + PostgreSQL</h1>
+	<span class="post-date">Sat 02 June 2018</span>
+	<p>I just went through the following process myself, so I figured, I'll post it here, it may help someone.</p>
+<p>This is a quick guide on how to serve a Flask application with PostgresSQL, 
+using an Nginx proxy server with automatic creation/renewal of SSL certificates (using Let's Encrypt), 
+all of which through docker containers.</p>
+<h2 id="requirements">Requirements:</h2>
+<ul>
+<li>docker, follow the official guide for Ubuntu <a href="https://docs.docker.com/install/linux/docker-ce/ubuntu/">here</a>. (4 min)</li>
+<li>docker-compose, also <a href="https://docs.docker.com/compose/install/">this</a> official guide. (1 min)</li>
+</ul>
+<h2 id="steps">Steps:</h2>
+<p><b>1.</b> Clone this <a href="https://github.com/badjio/Docker-Nginx-Letsencrypt-Flask-Postgres">repository</a>.</p>
+<pre class="highlight"><code class="language-bash">~$ git clone https://github.com/badjio/Docker-Nginx-Letsencrypt-Flask-Postgres myblog</code></pre>
+
+
+<p><b>2.</b> Navigate your terminal to nginx directory and edit <span style="background-color:#eee">'.env'</span> file: set <span style="background-color:#eee">'NGINX_FILES_PATH'</span> and <span style="background-color:#eee">'WEB_STATIC_FILES_PATH'</span> variables:</p>
+<pre class="highlight"><code class="language-bash">~$ cd myblog/nginx
+~/myblog/nginx$ nano .env</code></pre>
+
+
+<p><br style="display:none"></p>
+<pre class="highlight"><code class="language-bash">#
+# NGINX file path
+#
+NGINX_FILES_PATH=/myblog/nginx/data
+
+#
+# Flask WebApp Static Files
+#
+WEB_STATIC_FILES_PATH=/myblog/flask/web/static
+#</code></pre>
+
+
+<p>save &amp; close the file. </p>
+<p><b>3.</b> Execute the <span style="background-color:#eee">'start.sh'</span> file, and wait few seconds for the containers to be created.</p>
+<pre class="highlight"><code class="language-bash">~/myblog/nginx$ ./start.sh</code></pre>
+
+
+<p><br style="display:none"></p>
+<pre class="highlight"><code class="language-bash">~$ Creating nginx-gen         ... done
+~$ Creating nginx-letsencrypt ... done
+~$ Creating nginx-web         ... done</code></pre>
+
+
+<p>Check if the containers are running:</p>
+<pre class="highlight"><code class="language-bash">~$ docker ps</code></pre>
+
+
+<p><br style="display:none"></p>
+<pre class="highlight"><code class="language-bash">IMAGE                                    CREATED             STATUS              PORTS                                      NAMES
+nginx                                    10 seconds ago      Up 8 seconds        0.0.0.0:80-&gt;80/tcp, 0.0.0.0:443-&gt;443/tcp   nginx-web
+jrcs/letsencrypt-nginx-proxy-companion   10 seconds ago      Up 8 seconds                                                   nginx-letsencrypt
+jwilder/docker-gen                       10 seconds ago      Up 8 seconds                                                   nginx-gen</code></pre>
+
+
+<p><b>5.</b> Navigate to the flask app directory, and edit <span style="background-color:#eee">'.env'</span> file (for the environment variables during docker build) 
+and <span style="background-color:#eee">'env_file'</span> (for environment variables within the containers):</p>
+<pre class="highlight"><code class="language-bash">## .env
+
+# Your domain (or domains)
+DOMAINS=yourdomain.com,www.yourdomain.com
+
+# Your email for Let's Encrypt register
+LETSENCRYPT_EMAIL=&lt;your_email@example.com&gt;</code></pre>
+
+
+<p><br style="display:none"></p>
+<pre class="highlight"><code class="language-bash">## env_file
+
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=&lt;YOUR_DB_PASSWORD&gt;
+POSTGRES_DB=&lt;YOUR_DB_NAME&gt;
+# Name of database container, it's &quot;db&quot; if you didn't change it in docker-compose.yml:
+POSTGRES_HOST=db</code></pre>
+
+
+<p>Finally, from the flask directory, execute the following docker-compose command:</p>
+<pre class="highlight"><code class="language-bash">~/myblog/flask$ docker-compose up -d</code></pre>
+
+
+<p><b>6.</b> Wait few moments for the certificates to be generated, then open your website and check the url address box, it should start with <span style="background-color:#eee">'https://'</span> (with a green lock next to it.)</p>
+<p>If you used the Flask app example provided, you will see the following page:</p>
+<p><img alt="Blog Example Index Page" src="https://image.ibb.co/cc0WFo/working1.png"></p>
+<p><b>7.</b> Test to see if the database is working properly, by entering some values and submitting the form:</p>
+<p><img alt="Submitting The Form" src="https://image.ibb.co/mduDT8/working2.png"></p>
+<p>It's working!.</p>
+<p>SSL server <a href="https://www.ssllabs.com/ssltest/index.html">test</a></p>
+<p><img alt="SSL Server Test" src="https://image.ibb.co/cevsQT/myblog_3.png"></p>
+<h2 id="notes">Notes:</h2>
+<ul>
+<li>I used <a href="http://gunicorn.org/">Gunicorn</a> for the flask app WSGI server.</li>
+<li>Postgres db persistant data volume is under <span style="background-color:#eee">'<repo_dir>/db/data/'</span> (you can change it from docker-compose.yml)</li>
+<li>If you want to add custom nginx configurations, place the .conf files in <span style="background-color:#eee">'<repo_dir>/nginx/d.conf/'</span> directory (before step 3).</li>
+<li>Make sure to configure your domain name DNS to point to you server's ip address.</li>
+<li>If you're using a firewall you'll have to open port 443 (and 80), I used a Lightsail instance, and spent an hour trying to figure out why the website was not working, before I realize the port is closed by default from the console.</li>
+</ul>
+<h2 id="credits">Credits:</h2>
+<ul>
+<li><a href="https://github.com/jwilder/docker-gen">docker-gen</a> and <a href="https://github.com/jwilder/nginx-proxy">nginx-proxy</a> by <a href="https://github.com/jwilder">Jason Wilder</a></li>
+<li><a href="https://github.com/evertramos/docker-compose-letsencrypt-nginx-proxy-companion">docker-compose-letsencrypt-nginx-proxy-companion</a> by <a href="https://github.com/evertramos">Evert Ramos</a></li>
+</ul>
+</div>
+</div>
+<script
+        src="https://code.jquery.com/jquery-3.3.1.min.js"
+        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+<script src="/ace-build/src-min-noconflict/ace.js" type="text/javascript" charset="utf-8"></script><style>td.linenos {
+    display: none;
+}
+
+pre {
+    box-sizing: content-box;
+    padding: 0;
+    border-radius: 0;
+}
+
+.ace_gutter-cell {
+    cursor: pointer;
+}
+
+.ace_layer {
+    height: 100% !important;
+}
+
+.ace-chrome .ace_marker-layer .ace_selection {
+    border-radius: 0;
+}
+
+span.o {
+    display: block;
+}</style><script>var ACE_EDITOR_SCROLL_TOP_MARGIN = 0;var ACE_EDITOR_THEME = 'monokai';var ACE_EDITOR_MAXLINES = 100;var ACE_EDITOR_READONLY = true;var ACE_EDITOR_AUTOSCROLL = true;var ACE_EDITOR_SHOW_INVISIBLE = false;var SHOW_GUTTER = true;var Range = ace.require("ace/range").Range;
+
+var editor_array = {};
+
+var correlationDic = {
+    'bash': 'sh'
+}
+
+// inspiration : https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt#A_stricter_parse_function
+filterInt = function (value) {
+  if(/^(\-|\+)?([0-9]+|Infinity)$/.test(value))
+    return Number(value);
+  return NaN;
+}
+
+function linesInAnchor(anchor) {
+  anchorObject = {};
+  anchorObject.first = 0;
+  anchorObject.last = 0;
+  anchorObject.anchor = "";
+  var firstLineIndex = anchor.indexOf("-L");
+  var firstResult = anchor.substring(
+    firstLineIndex + 2
+  );
+  if(filterInt(firstResult)) {
+    anchorObject.first = filterInt(firstResult) - 1;
+    anchorObject.last = anchorObject.first;
+    anchorObject.anchor = anchor.substring(0, firstLineIndex + 2) + firstResult;
+    return anchorObject;
+  }
+  var secondLineIndex = firstResult.indexOf("-L");
+
+  if (!filterInt(firstResult.substring(0, secondLineIndex))) {
+    return anchorObject;
+  }
+  anchorObject.anchor = anchor.substring(0, firstLineIndex + 2) + firstResult.substring(0, secondLineIndex);
+
+  anchorObject.first = filterInt(firstResult.substring(0, secondLineIndex)) - 1;
+  var secondResult = firstResult.substring(
+    secondLineIndex + 2
+  );
+  if (!filterInt(secondResult)) {
+    anchorObject.last = anchorObject.first;
+    return anchorObject;
+  }
+  anchorObject.last = filterInt(secondResult) - 1;
+  return anchorObject;
+}
+
+var selectionCallback = function (event, editor) {
+    var editor_id = $(editor.container).attr('id');
+    var range = editor.selection.getRange();
+    location.hash = editor_id + '-L' + parseInt(range.start.row + 1);
+    if ($(editor.container).data().hasOwnProperty("id")) {
+        event.preventDefault();
+    }
+    else if (range.start.row != range.end.row) {
+        location.hash += '-L' + parseInt(range.end.row + 1);
+    }
+    $(editor.container).removeData();
+};
+
+$(function() {
+    var $pre_filter = $('pre.highlight');
+    var pre_len = $pre_filter.length;
+    $pre_filter.each(function(item) {
+        var lang = $(this).find("code").attr('class').substring(9);
+        if (lang in correlationDic) {
+            lang = correlationDic[lang];
+        }
+        var one_render = true;
+        var nb_of_lines = $(this).text().search('\n');
+        // avoid the last carriage return
+        $(this).text($(this).text().substring(0, $(this).text().length));
+
+        // Give a unique id on all editor
+        var editor_id = 'editor' + parseInt(item + 1);
+        $(this).attr('id', editor_id);
+        var editor = ace.edit(editor_id);
+        editor_array[editor_id] = editor;
+        editor.setTheme("ace/theme/" + ACE_EDITOR_THEME);
+        editor.setShowInvisibles(ACE_EDITOR_SHOW_INVISIBLE);
+        editor.setOptions({
+            mode: "ace/mode/" + lang,
+            maxLines: ACE_EDITOR_MAXLINES,
+            readOnly: ACE_EDITOR_READONLY,
+            autoScrollEditorIntoView: ACE_EDITOR_AUTOSCROLL
+        });
+        editor.$blockScrolling = Infinity;
+        if (nb_of_lines === -1) {
+            editor.renderer.setShowGutter(SHOW_GUTTER);
+        }
+
+        editor.renderer.on("afterRender", function(event) {
+            var anchor = linesInAnchor(location.hash);
+            var hash_editor = location.hash.substring(1, location.hash.indexOf("-"));
+            var line = $($(editor.container).find(".ace_gutter-cell")[parseInt(editor_id.substring(6))]);
+            if (hash_editor == editor_id && one_render) {
+                var offset = line.offset();
+                if (offset) {
+                    $(document).scrollTop(offset.top - ACE_EDITOR_SCROLL_TOP_MARGIN);
+                    editor.selection.setRange(new Range(
+                        anchor.first, 0, anchor.last,  Number.MAX_VALUE)
+                    );
+                    one_render = false;
+                }
+            }
+        });
+
+        editor.resize(true);
+        editor.selection.on("changeSelection", function(event) {
+            selectionCallback(event, editor);
+        });
+    });
+
+    $(".ace_gutter-cell").on("click", function(event) {
+        var editor_id = $(this).closest('pre.ace_editor').attr('id');
+        var editor = editor_array[editor_id];
+        var line = parseInt($(this).text()) - 1;
+        editor.selection.setRange(new Range(line, 0, line, Number.MAX_VALUE));
+        $(this).closest('.ace_editor').data({'id': parseInt($(this).text())});
+        selectionCallback(event, editor);
+    });
+});</script>
+<script type="text/javascript">
+    $(window).on('scroll', function () {
+        var pixs = $(document).scrollTop();
+        // console.log(pixs / 100);
+        // pixs = pixs / 100;
+        pixs = Math.min((pixs / 100), 2.5);
+        $(".sidebar-sticky").css({"-webkit-filter": "blur(" + pixs + "px)", "filter": "blur(" + pixs + "px)"})
+    });
+</script>
+</body>
+</html>
