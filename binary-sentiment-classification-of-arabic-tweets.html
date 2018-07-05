@@ -34,7 +34,7 @@
             <h1>
                 <a href="/">
                     <img class="profile-picture" src="/theme/images/mb-author-pn38y1s5.png">
-                    Moh.B
+                    Moh .B
                 </a>
             </h1>
             <p class="lead"></p>
@@ -56,18 +56,18 @@
 	<span class="post-date">Sat 16 June 2018</span>
 	<h2 id="abstract">Abstract:</h2>
 <p>In this post, I'll go through my attempt of building a neural network for binary classification of arabic tweets
-sentiments (positive/negative). Starting by how I collected a dataset of 9 million labeled tweets, then using it train an RNN
+sentiments (positive/negative). Starting by how I collected a data set of 9 million labeled tweets, then using it train an RNN
  model that achieved an accuracy of 84%.</p>
 <h2 id="data">Data:</h2>
 <p>As opposed to Stanford's <a href="http://help.sentiment140.com/for-students/">sentiment140</a> dataset for labeled english tweets, there is no equivalent for arabic tweets,
-so I had to either build the dataset myself, by manually labeling it, which is time consuming and won't be nearly enough
-to train a neural network with, or use mturk crowd-sourcing marketplace, but the cost will be very high for a decently large dataset.</p>
+so I had to either build the data set myself, by manually labeling it, which is time consuming and won't be nearly enough
+to train a neural network with, or use mturk crowd-sourcing marketplace, but the cost will be very high for a decently large data set.</p>
 <p>I came across an interesting approach used in this <a href="https://gab41.lab41.org/classifying-arabic-sentiment-like-a-%D9%86%D8%A7%D8%B7%D9%82-%D8%A8%D9%87%D8%A7-%D9%83%D9%84%D8%BA%D8%AA%D9%83-%D8%A7%D9%84%D8%A3%D9%85-308682ee73ec">article</a>, 
 the authors labeled tweets containing emoticons/emojis based on the emoji's emotional content, e.g: 😀 indicates a positive sentiment and the opposite for 😒.</p>
 <p>It was a good starting point, so tried it myself and collected around 4.3 million arabic tweet containing specific emojis, and used it to train an RNN (LSTM) model, 
 it reached a maximum validation accuracy of 78%, however, after testing it on a collection of manually labeled tweets [3][4][5], the score dropped to 71%,
 with some inspection of the training data, one reason for the drop in performance was clear: <strong>sarcasm</strong>,
-many tweets with positive emojis were obviously negative in their sentiment, thus resulting in a poorly labeled dataset.</p>
+many tweets with positive emojis were obviously negative in their sentiment, thus resulting in a poorly labeled data set.</p>
 <pre class="highlight"><code class="language-text"># Examples of sarcastic tweets with negative sentiment and a positive emoji,
 اكتشفت انو العلم ممكن يكون نِقمة 😂 اليوم الدكتور عصب مني ويقول اسوأ انواع المرضى طلاب الطب والصيدلة
 منطق النائب وفكره يدرسان كأسوأ مثال على احترام حقوق الآخرين والدفاع عن هذه الحقوق. سعادتك تفوقت على ذاتك 👍
@@ -84,6 +84,13 @@ with the mean vectors of the words for every tweet.</p>
 from gensim.models import Word2Vec, TfidfModel
 from gensim import corpora
 import numpy as np
+from keras.preprocessing.text import Tokenizer
+from keras.preprocessing.sequence import pad_sequences
+from keras.utils import to_categorical, Sequence
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Embedding, LSTM, \
+    TimeDistributed, Bidirectional, Flatten
+from keras.callbacks import EarlyStopping, CSVLogger, ModelCheckpoint
 import multiprocessing as mp
 from time import sleep
 import os
@@ -131,7 +138,7 @@ DATASET_FILE = os.path.join(DATA_DIR, 'dataset.csv')</code></pre>
 <strong>13.</strong> Remove duplicates.</p>
 <p>After cleaning the data, I was left with 31 million tweets (from 86 mil), which was enough to continue to the next step.</p>
 <h3 id="building-word2vec-embeddings">Building Word2Vec Embeddings:</h3>
-<p>I used gensim's <a href="https://radimrehurek.com/gensim/models/word2vec.html">Word2vec</a> implementation to train a model on the dataset.</p>
+<p>I used gensim's <a href="https://radimrehurek.com/gensim/models/word2vec.html">Word2vec</a> implementation to train a model on the data set.</p>
 <pre class="highlight"><code class="language-python">class Sentences(object):
 def __init__(self, dirname):
     self.dirname = dirname
@@ -155,11 +162,11 @@ print(model.wv.most_similar(positive=['امرأه', 'ملك'], negative=['رجل
 # [('ملكه', 0.5649329423904419)]</code></pre>
 
 
-<h3 id="building-labeled-dataset">Building Labeled Dataset:</h3>
+<h3 id="building-labeled-data-set">Building Labeled Data set:</h3>
 <p>I did something similar to the <a href="https://zablo.net/blog/post/twitter-sentiment-analysis-python-scikit-word2vec-nltk-xgboost">post</a> mentioned above, but instead of focusing on a single word for each label, and since arabic 
 language has many dialects (&gt; 10) and there are many words to express 'good' or 'bad'. I collected
 two lists of words that usually tend to appear exclusively in tweets with either one of these sentiments (pos/neg). 
-Some of these words were chosen from the dictionary of the most frequent terms in this dataset,
+Some of these words were chosen from the dictionary of the most frequent terms in this data set,
 and the rest from inspecting some samples, by the end I collected ~260 terms for each label.</p>
 <p>Next, to build the 'extremely polarized' vectors to compare the tweets to, I tried few combinations.
 And ended up taking the average vector of 5 random words, and repeated this step 100 times (for each list).</p>
@@ -281,7 +288,7 @@ if __name__ == '__main__':
     pool.join()</code></pre>
 
 
-<p>Let's check few examples from the annotated dataset,</p>
+<p>Let's check few examples from the annotated data set,</p>
 <h4 id="positive">Positive:</h4>
 <pre class="highlight"><code class="language-python">df = pd.read_csv(os.path.join(DATA_DIR, 'dataset-annotated.csv'), sep=',', encoding='utf-8', names=['pos', 'neg', 'tweet'])
 pd.set_option('display.max_columns', None)
@@ -389,7 +396,7 @@ negative_df = df[(df['neg'] &gt;= 0.15) &amp; (df['neg'] - df['pos'] &gt;= 0.15)
 <p>using the statements above, returned 4.5 million positive tweets, and 6.8 mil negative tweets.</p>
 <h2 id="training">Training:</h2>
 <p>Finally we have the labeled data, we can use it to train a neural network with,
-first prepare the data to pass it to the models:</p>
+but first prepare the data to pass it to the models:</p>
 <pre class="highlight"><code class="language-python">MAX_NB_WORDS = 500000
 MAX_SEQUENCE_LENGTH = 200
 EMBEDDING_DIM = 300
@@ -512,16 +519,20 @@ model.fit_generator(generate_data,
 
 <h2 id="results">Results:</h2>
 <p>All the models I've tested performed very well, reaching upwards of 95% validation accuracy on the first few epochs, 
-even without the embedding layer, and with multiple dropouts..this maybe due to the fact that the dataset mostly contains extremely polarized tweets.
-So the important question now is: how well will it perform on other datasets?</p>
-<p>Hence to get more meaningful results, I used different data for validation,
+even without the embedding layer, and with multiple dropouts..this maybe due to the fact that the data set mostly contains extremely polarized tweets.
+So the important question now is: how well will it generalize to other data sets?</p>
+<p>Hence to get more meaningful results, I used different data for testing,
 a collection of 4400 manually labeled tweets from different sources [3][4][5].
  The best accuracy; obtained by the model above at 83.89%
 which is quite good for a twitter sentiment classification problem.</p>
+<!---
+*Note:* Will update the article to include a link to a live server that uses this model with D3.js to visualize live data examples.
+ --->
+
 <h2 id="whats-next">What's Next:</h2>
 <ul>
 <li>Repeat the same process to obtain neutral tweets. (already done it, the results are quite similar, will probably post it in a second part.)</li>
-<li>Split the neutral dataset into two parts, one contains the ads and spam tweets, the other news, information and questions..
+<li>Split the neutral data set into two parts, one contains the ads and spam tweets, the other news, information and questions..
 , the first class is just noise that negatively affects the performance, while the latter adds sentimental value.</li>
 <li>Combine the vectors comparison method with the neural network model for the final predictions.</li>
 <li>Try with other pre-trained word embeddings, (e.g. fastText, GoogleNews-vectors ).
