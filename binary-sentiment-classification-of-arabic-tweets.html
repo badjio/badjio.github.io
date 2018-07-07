@@ -54,20 +54,22 @@
 <div class="post"  >
 	<h1 class="post-title">Binary Sentiment Classification Of Arabic Tweets.</h1>
 	<span class="post-date">Sat 16 June 2018</span>
-	<h2 id="abstract">Abstract:</h2>
+	<h2 id="summary">Summary:</h2>
 <p>In this post, I'll go through my attempt of building a neural network for binary classification of arabic tweets
-sentiments (positive/negative). Starting by how I collected a data set of 9 million labeled tweets, then using it train an RNN
+sentiments (positive/negative). Starting by how I collected a data set of 9 million labeled tweets, and then using it train an RNN
  model that achieved an accuracy of 84%.</p>
 <h2 id="data">Data:</h2>
-<p>As opposed to Stanford's <a href="http://help.sentiment140.com/for-students/">sentiment140</a> dataset for labeled english tweets, there is no equivalent for arabic tweets,
-so I had to either build the data set myself, by manually labeling it, which is time consuming and won't be nearly enough
-to train a neural network with, or use mturk crowd-sourcing marketplace, but the cost will be very high for a decently large data set.</p>
-<p>I came across an interesting approach used in this <a href="https://gab41.lab41.org/classifying-arabic-sentiment-like-a-%D9%86%D8%A7%D8%B7%D9%82-%D8%A8%D9%87%D8%A7-%D9%83%D9%84%D8%BA%D8%AA%D9%83-%D8%A7%D9%84%D8%A3%D9%85-308682ee73ec">article</a>, 
-the authors labeled tweets containing emoticons/emojis based on the emoji's emotional content, e.g: 😀 indicates a positive sentiment and the opposite for 😒.</p>
-<p>It was a good starting point, so tried it myself and collected around 4.3 million arabic tweet containing specific emojis, and used it to train an RNN (LSTM) model, 
-it reached a maximum validation accuracy of 78%, however, after testing it on a collection of manually labeled tweets [3][4][5], the score dropped to 71%,
-with some inspection of the training data, one reason for the drop in performance was clear: <strong>sarcasm</strong>,
-many tweets with positive emojis were obviously negative in their sentiment, thus resulting in a poorly labeled data set.</p>
+<p><em>Note: skip to the next section for the actual project</em></p>
+<p>For machine learning algorithms to perform well, it requires a lot of data, thousands to millions of examples depending on the complexity of the problem. Unfortunately, for my project
+there is no arabic data set for labeled tweets big enough to use in ML, as opposed to Stanford's <a href="http://help.sentiment140.com/for-students/">sentiment140</a> data set for english tweets. 
+So, I had to either build it myself, by manually labeling it, which would of been time consuming and not nearly enough
+to train a neural network with, or go with the other option of using Amazon's mturk crowd-sourcing marketplace, but an <a href="https://morninj.github.io/mechanical-turk-cost-calculator/">estimated</a> cost for a decently large data set came pretty high.</p>
+<p>In hope of finding a practical solution, I came across this <a href="https://gab41.lab41.org/classifying-arabic-sentiment-like-a-%D9%86%D8%A7%D8%B7%D9%82-%D8%A8%D9%87%D8%A7-%D9%83%D9%84%D8%BA%D8%AA%D9%83-%D8%A7%D9%84%D8%A3%D9%85-308682ee73ec">article</a> that used an interesting approach (based on this <a href="https://arxiv.org/abs/1509.07761">paper</a>), 
+the authors labeled tweets according to the emotional content of emoticons/emojis, e.g: a tweet containing this emoji: "😀" indicates a positive sentiment and the opposite for: "😒".</p>
+<p>It was a good starting point, so I collected a data set of 4.3 million arabic tweet containing polarized emojis, and used it afterward to train multiple neural networks, 
+the best model had a validation accuracy of 78%. However, when I tested it on different collections of manually labeled tweets [3][4][5], the score dropped to 71%.</p>
+<p>After some inspection of samples from the training data, one obvious reason for the drop in performance was clear: <strong>sarcasm</strong>.</p>
+<p>In other words, many tweets with positive emojis were obviously negative in their intention (sarcastic), that resulted in a poorly labeled data set, which in turn affected the performance of the model when tested on proper data.</p>
 <pre class="highlight"><code class="language-text"># Examples of sarcastic tweets with negative sentiment and a positive emoji,
 اكتشفت انو العلم ممكن يكون نِقمة 😂 اليوم الدكتور عصب مني ويقول اسوأ انواع المرضى طلاب الطب والصيدلة
 منطق النائب وفكره يدرسان كأسوأ مثال على احترام حقوق الآخرين والدفاع عن هذه الحقوق. سعادتك تفوقت على ذاتك 👍
@@ -76,9 +78,12 @@ many tweets with positive emojis were obviously negative in their sentiment, thu
 اوك نعارض اشياء بالمعقول بس اني اخذ اهلي واوديهم الملعب !! سلامات وين عايشين 😂</code></pre>
 
 
-<p>So I had to try another approach, I found one more interesting <a href="https://zablo.net/blog/post/twitter-sentiment-analysis-python-scikit-word2vec-nltk-xgboost">post</a> where the author assigned for the labels: positive, negative and neutral,
-the words: 'good', 'bad' and 'information, respectively. And used the similarity between the embedding vectors of these expressive words
-with the mean vectors of the words for every tweet.</p>
+<p>At this point I tried few adjustments, but the gains in performance were insignificant. 
+Once again I had to try a better approach, luckily I found another interesting <a href="https://zablo.net/blog/post/twitter-sentiment-analysis-python-scikit-word2vec-nltk-xgboost">post</a>.</p>
+<p>Here, the author assigned for the labels: 'positive', 'negative' and 'neutral',
+the words: 'good', 'bad' and 'information', respectively. And looked for the similarity between the embedding vectors of these expressive words
+with those of the tweets (by taking the an average of the words vectors of each tweet). 
+I used a similar methodology based on the same idea, as you will see below. </p>
 <h3 id="packages">Packages:</h3>
 <pre class="highlight"><code class="language-python">import pandas as pd
 from gensim.models import Word2Vec, TfidfModel
@@ -104,11 +109,15 @@ DATA_DIR = os.path.join(ROOT_DIR, 'data')
 DATASET_FILE = os.path.join(DATA_DIR, 'dataset.csv')</code></pre>
 
 
+<p><br>    </p>
+<h3 id="collecting-data">Collecting Data:</h3>
+<p>I collected the tweets using Twitter's streaming API (through Tweepy wrapper), by tracking common used arabic stop words.
+I used MongoDB to store the tweets (later on exporting it to csv files). The stream listener had collected 81 million tweets in a period of two months.</p>
 <h3 id="pre-processing">Pre-Processing:</h3>
 <p>These are the steps I applied to filter out the noise and clean the tweets:</p>
 <p><strong>Initial requirements:</strong></p>
 <p><strong>1.</strong> Skip any tweet with (hashtags &gt; 3), (urls &gt; 1).</p>
-<p><strong>2.</strong> Skip any tweet with a phone number, these are usually ads and have no sentimental value, same as the previous point.</p>
+<p><strong>2.</strong> Skip any tweet with a phone number, these are usually ads and have no sentimental value, same goes for the previous point.</p>
 <p><strong>Cleaning process:</strong></p>
 <p><strong>3.</strong> Remove hashtags, retweets, mentions and urls.</p>
 <p><strong>4.</strong> Remove <em>tashkil</em> (is sometimes used to help with correct pronunciation of words)</p>
@@ -134,11 +143,11 @@ DATASET_FILE = os.path.join(DATA_DIR, 'dataset.csv')</code></pre>
   <figcaption><u>Figure[1]:</u> word_count / letter_count of the tweets. </figcaption>
 </figure>
 
-<p><strong>12.</strong> Discard any tweet with a length less than 16 characters.
-<strong>13.</strong> Remove duplicates.</p>
-<p>After cleaning the data, I was left with 31 million tweets (from 86 mil), which was enough to continue to the next step.</p>
+<p><strong>12.</strong> Discard any tweet with a length less than 16 characters.</p>
+<p><strong>13.</strong> Remove duplicates.</p>
+<p>After passing the data through the steps above, I was left with 31 million tweets, enough to continue to the next step.</p>
 <h3 id="building-word2vec-embeddings">Building Word2Vec Embeddings:</h3>
-<p>I used gensim's <a href="https://radimrehurek.com/gensim/models/word2vec.html">Word2vec</a> implementation to train a model on the data set.</p>
+<p>Using a pre-trained embeddings layer for the neural networks can improve the performance in some models, I utilised Gensim's <a href="https://radimrehurek.com/gensim/models/word2vec.html">Word2vec</a> implementation to train a model on the data set.</p>
 <pre class="highlight"><code class="language-python">class Sentences(object):
 def __init__(self, dirname):
     self.dirname = dirname
@@ -163,13 +172,13 @@ print(model.wv.most_similar(positive=['امرأه', 'ملك'], negative=['رجل
 
 
 <h3 id="building-labeled-data-set">Building Labeled Data set:</h3>
-<p>I did something similar to the <a href="https://zablo.net/blog/post/twitter-sentiment-analysis-python-scikit-word2vec-nltk-xgboost">post</a> mentioned above, but instead of focusing on a single word for each label, and since arabic 
-language has many dialects (&gt; 10) and there are many words to express 'good' or 'bad'. I collected
-two lists of words that usually tend to appear exclusively in tweets with either one of these sentiments (pos/neg). 
-Some of these words were chosen from the dictionary of the most frequent terms in this data set,
-and the rest from inspecting some samples, by the end I collected ~260 terms for each label.</p>
-<p>Next, to build the 'extremely polarized' vectors to compare the tweets to, I tried few combinations.
-And ended up taking the average vector of 5 random words, and repeated this step 100 times (for each list).</p>
+<p>I populated two lists of words that usually tend to appear exclusively in tweets with either one of the classes (pos/neg),
+ Instead of focusing on a single word for each label like in the article mentioned above, the reason being arabic 
+language has many dialects (&gt; 10) and there are many words to express 'good' or 'bad'. 
+Some of these words were chosen from the dictionary of the most frequent terms in the data set,
+and the rest from manually inspecting some samples, by the end I collected ~260 terms for each label.</p>
+<p>To build the 'extremely polarized' vectors to compare the tweets to, I tried few combinations.
+And ended up taking the average vector of 5 random words taken from each of the lists, and repeated this step 100 times. (so 100 vector for each class)</p>
 <pre class="highlight"><code class="language-python">pos_tokens = ['مبروك', 'جميل', 'الحب', 'احلى', 'موافق', 'رائع', 'اسطوره', '...', '...']  # total: 271
 neg_tokens = ['مشكله', 'حرام', 'اسوء', 'للاسف', 'مؤلم', 'عيب', 'مصيبه', '...', '...']  # total: 252
 
@@ -191,22 +200,22 @@ for i in range(0, 100):
     pos_vecs_list.append(doc_vec_avg(random.sample(pos_tokens, 5)))
     neg_vecs_list.append(doc_vec_avg(random.sample(neg_tokens, 5)))
 
-extremes_vecs  = np.array([pos_vecs_list, neg_vecs_list]) 
-np.save('extremes_vecs.npy', extremes_vecs)
-print(extremes_vecs.shape)
+polarized_vecs  = np.array([pos_vecs_list, neg_vecs_list]) 
+np.save('polarized_vecs.npy', polarized_vecs)
+print(polarized_vecs.shape)
 # (2, 100, 300)
 #</code></pre>
 
 
-<p>For obtaining the tweets vectors, I used the <a href="https://en.wikipedia.org/wiki/Tf%E2%80%93idf">If-idf</a> weighting (term frequency-inverse document frequency),
+<p>Next, for obtaining the tweets vectors, I used the <a href="https://en.wikipedia.org/wiki/Tf%E2%80%93idf">If-idf</a> weighting (term frequency-inverse document frequency),
 it gives more weight to unique terms, and the contrary for more frequent terms like stop words,
-hence very helpful for producing a single meaningful vector for a whole sentence.</p>
+hence very helpful for producing a single meaningful vector for the whole tweet sentence.</p>
 <figure style="text-align: center;">
   <img src="https://image.ibb.co/mOww08/tfidf.png" style="display: block;margin-left: auto;margin-right: auto;">
-  <figcaption><u>Figure[2]:</u> TFIDF Formula: i: stands for the term (word), j: for the document (sentence) </figcaption>
+  <figcaption><u>Figure[2]:</u> TFIDF Formula: i: stands for the term (word), j: for the document (tweet) </figcaption>
 </figure>
 
-<p>I used gensim's TfidfModel,</p>
+<p>Gensim also comes with a TfidfModel:</p>
 <pre class="highlight"><code class="language-python">def documents():
     for line in open(os.path.join(DATA_DIR, DATASET_FILE), encoding='utf-8'):
         yield [word for word in line.lower().split() if word not in stoplist]
@@ -226,9 +235,11 @@ tfidf = models.TfidfModel(corpus)
 # tfidf.save('tfidf')</code></pre>
 
 
-<p>I used the multiprocessing module to speed up the comparison of tweets with the extremes vectors,
-it took 68 minutes on an AWS m4.4xlarge instance (16 vcores) to finish 31 million tweets:</p>
-<pre class="highlight"><code class="language-python">def doc_vec_tfidf(tokens):
+<p>Last step is comparing the tweets with the polarized vectors, I had to iterate over each tweet to generate its vector representation on the fly,
+then calculate its cosine similarity with 100-pos, 100-neg vectors and sum up the results, with millions of tweets this will take while.
+So I used the multiprocessing module to speed up the process, it took 68 minutes on an AWS m4.4xlarge instance (16 vcores) to finish the whole data set.</p>
+<pre class="highlight"><code class="language-python"># get tweet vector using 
+def doc_vec_tfidf(tokens):
     vecs = []
     bow_str = dictionary.doc2bow(tokens)
     for key, value in tfidf[bow_str]:
@@ -238,7 +249,7 @@ it took 68 minutes on an AWS m4.4xlarge instance (16 vcores) to finish 31 millio
             continue
     return np.average(vecs, axis=0)
 
-# get tweets from queue, calc cosine similarity with extremes_vecs:
+# get tweets from queue, calc cosine similarity with polarized_vecs:
 # sum_sims.shape: (2,) : [&lt;sum_pos_similarities&gt;, &lt;sum_neg_similarities&gt;]
 def worker(q, results):
     while True:
@@ -248,8 +259,8 @@ def worker(q, results):
         try:
             text = text.strip()
             tweet_vec = doc_vec_tfidf(text.split())
-            cos_sims = np.inner(extremes_vecs, tweet_vec) / (
-                    np.linalg.norm(extremes_vecs, axis=-1) * np.linalg.norm(tweet_vec))
+            cos_sims = np.inner(polarized_vecs, tweet_vec) / (
+                    np.linalg.norm(polarized_vecs, axis=-1) * np.linalg.norm(tweet_vec))
             sum_sims = np.sum(cos_sims, axis=1)
             results.append(np.append(sum_sims, text))
         except ValueError:
@@ -274,12 +285,12 @@ if __name__ == '__main__':
         sleep(1)
 
     # normalize and save results to csv file:
-    df = pd.DataFrame(list(results), columns=['pos', 'neg', 'ntr', 'tweet'])
+    df = pd.DataFrame(list(results), columns=['pos', 'neg', 'tweet'])
 
     cols = ['pos', 'neg', ]
     df[cols] = df[cols] / 100  # normalize values to range between -1 and 1
 
-    # or use z-score, different values from the above but same order when sorted (check below).
+    # or use z-score, different values from the above but will have the same order when sorted.
     # df[cols] = (df[cols] - df[cols].mean()) / df[cols].std()
 
     df.to_csv(os.path.join(DATA_DIR, 'dataset-annotated.csv'), encoding='utf-8', sep=',', index=False)
@@ -288,8 +299,8 @@ if __name__ == '__main__':
     pool.join()</code></pre>
 
 
-<p>Let's check few examples from the annotated data set,</p>
-<h4 id="positive">Positive:</h4>
+<p>Let's check few examples from the resulted annotated data set,</p>
+<p><strong>Positive:</strong></p>
 <pre class="highlight"><code class="language-python">df = pd.read_csv(os.path.join(DATA_DIR, 'dataset-annotated.csv'), sep=',', encoding='utf-8', names=['pos', 'neg', 'tweet'])
 pd.set_option('display.max_columns', None)
 df = df.sample(10 * 5)
@@ -340,7 +351,7 @@ print(df[['tweet', 'pos', 'neg', ]].head(6))</code></pre>
 </tr>
 </tbody>
 </table>
-<h4 id="negative">Negative:</h4>
+<p><strong>Negative:</strong></p>
 <pre class="highlight"><code class="language-python"># negative tweets:
 df = df.sort_values('neg', ascending=False)
 print(df[['tweet', 'pos', 'neg', ]].head(6))</code></pre>
@@ -387,18 +398,18 @@ print(df[['tweet', 'pos', 'neg', ]].head(6))</code></pre>
 </tr>
 </tbody>
 </table>
-<p>Both sets of examples seem accurate, proceeding to the last step, I used some conditional statements to classify the tweets,
-based on their scores:</p>
+<p>Both sets of examples seem accurately sorted, proceeding to the last step, I used some conditional statements to filter the tweets,
+based on their polarity scores, after testing with few options I found a score of 0.15 with the condition that the difference with the opposite score is no less that 0.15, gives very well results.</p>
 <pre class="highlight"><code class="language-python">positive_df = df[(df['pos'] &gt;= 0.15) &amp; (df['pos'] - df['neg'] &gt;= 0.15)]
 negative_df = df[(df['neg'] &gt;= 0.15) &amp; (df['neg'] - df['pos'] &gt;= 0.15)]</code></pre>
 
 
-<p>using the statements above, returned 4.5 million positive tweets, and 6.8 mil negative tweets.</p>
+<p>using the statements above, returned 4.5 million positive tweets, and 6.8m for negative tweets.</p>
 <h2 id="training">Training:</h2>
-<p>Finally we have the labeled data, we can use it to train a neural network with,
-but first prepare the data to pass it to the models:</p>
+<p>Finally with a labeled data set, it was time to train some neural networks with it,
+but before that preparing the data to be passed to the model:</p>
 <pre class="highlight"><code class="language-python">MAX_NB_WORDS = 500000
-MAX_SEQUENCE_LENGTH = 200
+MAX_SEQUENCE_LENGTH = 50
 EMBEDDING_DIM = 300
 BATCH_SIZE = 512
 VALIDATION_SPLIT = 0.2
@@ -445,7 +456,7 @@ y_train = labels[:-nb_validation_samples]
 x_val = data[-nb_validation_samples:]
 y_val = labels[-nb_validation_samples:]
 
-# generate batches of data on the fly:
+# generate batches of data:
 class GenerateData(Sequence):
 
     def __init__(self, x_set, y_set, batch_size):
@@ -461,7 +472,7 @@ class GenerateData(Sequence):
         return batch_x, batch_y
 
 
-# use our pre-trained word2vec model as an embedding layer:
+# use the same pre-trained word2vec model above as an embedding layer:
 embedding_matrix = np.zeros((len(word_index) + 1, EMBEDDING_DIM))
 for word, i in tqdm(word_index.items()):
     if word in embeddings_index.vocab:
@@ -476,7 +487,7 @@ embedding_layer = Embedding(len(word_index) + 1,
 
 
 <p>I tried different models and parameters, the recurrent network below returned the best score,
-using the pre-trained w2v vectors as the embedding layer and a bidirectional LSTM layer:</p>
+using one bidirectional LSTM layer:</p>
 <pre class="highlight"><code class="language-python">model = Sequential()
 model.add(embedding_layer)
 model.add(Bidirectional(LSTM(256, return_sequences=True)))
@@ -519,24 +530,21 @@ model.fit_generator(generate_data,
 
 <h2 id="results">Results:</h2>
 <p>All the models I've tested performed very well, reaching upwards of 95% validation accuracy on the first few epochs, 
-even without the embedding layer, and with multiple dropouts..this maybe due to the fact that the data set mostly contains extremely polarized tweets.
-So the important question now is: how well will it generalize to other data sets?</p>
-<p>Hence to get more meaningful results, I used different data for testing,
+even without an embedding layer and with multiple dropouts..this maybe due to the fact that the data set mostly contains extremely polarized tweets.
+That rises an important question: how well will it generalize to other data sets?</p>
+<p>Hence to answer the question and get more meaningful results, I used different data for testing,
 a collection of 4400 manually labeled tweets from different sources [3][4][5].
- The best accuracy; obtained by the model above at 83.89%
-which is quite good for a twitter sentiment classification problem.</p>
-<!---
-*Note:* Will update the article to include a link to a live server that uses this model with D3.js to visualize live data examples.
- --->
-
+ The best accuracy was obtained by the model above at: 83.89%
+which is quite good for a twitter sentiment classification problem, and with practically very little effort into labeling the data.</p>
+<p><em>Note: Will update the article to include a link to a live server that uses D3.js to visualize live data trends sentiments.</em></p>
 <h2 id="whats-next">What's Next:</h2>
 <ul>
-<li>Repeat the same process to obtain neutral tweets. (already done it, the results are quite similar, will probably post it in a second part.)</li>
-<li>Split the neutral data set into two parts, one contains the ads and spam tweets, the other news, information and questions..
+<li>Repeat the same process to obtain neutral tweets. (Already done it, the results are quite similar, will probably post it in a second part.)</li>
+<li>Split the neutral data set into two parts, one contains the ads and spam tweets, the other: news, infos and questions..
 , the first class is just noise that negatively affects the performance, while the latter adds sentimental value.</li>
 <li>Combine the vectors comparison method with the neural network model for the final predictions.</li>
 <li>Try with other pre-trained word embeddings, (e.g. fastText, GoogleNews-vectors ).
-Though, I tried another model that I trained on 1.9 million arabic news article, it performed lower than the one trained on tweets.</li>
+Though, I tried another w2v model that I trained on 1.9 million arabic news article, it performed worse than the one trained on tweets.</li>
 </ul>
 <h2 id="references">References:</h2>
 <p>[1] <a href="https://gab41.lab41.org/classifying-arabic-sentiment-like-a-%D9%86%D8%A7%D8%B7%D9%82-%D8%A8%D9%87%D8%A7-%D9%83%D9%84%D8%BA%D8%AA%D9%83-%D8%A7%D9%84%D8%A3%D9%85-308682ee73ec">Kyle Foster, Gab41. Classifying Arabic Sentiment Like a ناطق بها كلغتك الأم</a></p>
