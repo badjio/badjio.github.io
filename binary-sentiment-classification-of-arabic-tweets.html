@@ -73,11 +73,11 @@ the authors labeled tweets according to the emotional content of emoticons/emoji
 the best model had a validation accuracy of 78%. However, when I tested it on different collections of manually labeled tweets [3][4][5], the score dropped to 71%.</p>
 <p>After some inspection of samples from the training data, one obvious reason for the drop in performance was clear: <strong>sarcasm</strong>.</p>
 <p>In other words, many tweets with positive emojis were obviously negative in their intention (sarcastic), that resulted in a poorly labeled data set, which in turn affected the performance of the model when tested on proper data.</p>
-<pre class="highlight"><code class="language-text"># Examples of sarcastic tweets with negative sentiment and a positive emoji,
+<pre class="highlight"><code class="language-text" dir="rtl"># Examples of sarcastic tweets with negative sentiment and a positive emoji,
 اكتشفت انو العلم ممكن يكون نِقمة 😂 اليوم الدكتور عصب مني ويقول اسوأ انواع المرضى طلاب الطب والصيدلة
 منطق النائب وفكره يدرسان كأسوأ مثال على احترام حقوق الآخرين والدفاع عن هذه الحقوق. سعادتك تفوقت على ذاتك 👍
 #ملخص٢٠١٧  سنة كئيبة بكل تفاصيلها 👌
-يوم كئيب كالعادة  Gnight ☺
+يوم كئيب كالعادة  Gnight 😀
 اوك نعارض اشياء بالمعقول بس اني اخذ اهلي واوديهم الملعب !! سلامات وين عايشين 😂</code></pre>
 
 
