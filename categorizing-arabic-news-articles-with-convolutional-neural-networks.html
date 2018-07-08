@@ -57,8 +57,8 @@
 <div class="post"  >
 	<h1 class="post-title">Categorizing Arabic News Articles With Convolutional Neural Networks</h1>
 	<span class="post-date">Wed 23 May 2018</span>
-	<p>In a previous <a href="/arabic-news-articles-dataset.html">post</a>, I published a dataset of arabic news articles, it contained 140k articles divided into 7 categories.
-In this post, I'll use that dataset as an example to train Neural Networks using keras, 
+	<p>In a previous <a href="/arabic-news-articles-dataset.html">post</a>, I published a dataset of Arabic news articles, it contained 140k articles divided into 7 categories.
+In this post, I'll use that dataset as an example to train Neural Networks using Keras, 
 to classify each article into one of the seven categories.
 Let's start first by creating 'train.py' file:</p>
 <h2 id="trainpy">train.py</h2>
@@ -167,7 +167,7 @@ callbacks = [checkpoint, csv_logger, early_stopping, ]</code></pre>
 #&gt;Epoch: 4/120 - loss: 0.1150 - acc: 0.9626 - val_loss: 0.3594 - val_acc: 0.8980</code></pre>
 
 
-<p>Validation accuracy quickly reached maximum at 90.38% by the second epoch, and started overfitting to the training data after that, even with dropout layers.</p>
+<p>Validation accuracy quickly reached maximum at 90.38% by the second epoch, but notice how it started overfitting to the training data after that.</p>
 <p><strong><u>Model 2:</u></strong></p>
 <p>Let's change the model and see if we can get any better score,  this time we'll use a different CNN architecture similar to the one used in this <a href="https://arxiv.org/abs/1510.03820">paper</a> [1], also explained in this <a href="https://towardsdatascience.com/understanding-how-convolutional-neural-network-cnn-perform-text-classification-with-word-d2ee64b9dd0b">article</a> [2].</p>
 <figure>
@@ -233,7 +233,7 @@ model.compile(loss='categorical_crossentropy',
   <figcaption><u>Fig.2:</u> Summary of CNN Model.2 with multiple input layers.</figcaption>
 </figure>
 
-<p>Note: since this model has three input layers (Figure #2), we have to pass the training/validation data to each one of these layers.</p>
+<p>Note: since this model has three input layers (Figure #2), must pass the training/validation data to each one of these layers.</p>
 <pre class="highlight"><code class="language-python">model.fit([x_train, x_train, x_train],
       y_train,
       batch_size=BATCH_SIZE,
@@ -256,7 +256,7 @@ model.compile(loss='categorical_crossentropy',
 <p>The maximum accuracy achieved was 92.47%, an improvement over the first model. The training took about 80 minutes for 110 epochs (early stopping triggered).
 Unlike the first model the training became much slower with the addition of the pre-trained embedding layer, the accuracy steadily increased over time, and the loss was more resistant to overfitting.</p>
 <h2 id="predictpy">predict.py</h2>
-<p>So now that we trained our network and saved the one with the best score. Let's test it, create a file named: 'predict.py':</p>
+<p>So now that we trained our network and saved the model with the best score. Let's test it, create a file named: 'predict.py':</p>
 <pre class="highlight"><code class="language-python">from keras.models import load_model
 from keras.preprocessing.sequence import pad_sequences
 import pandas as pd
@@ -296,7 +296,7 @@ sequences = tokenizer.texts_to_sequences(texts)
 data = pad_sequences(sequences, maxlen=MAX_SEQUENCE_LENGTH)</code></pre>
 
 
-<p>Now let's load the trained keras model that we just saved, </p>
+<p>Now let's load the trained Keras model that we just saved, </p>
 <pre class="highlight"><code class="language-python">model = load_model('model2-cnn.90-0.92471.hdf5')</code></pre>
 
 
