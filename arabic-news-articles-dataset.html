@@ -7,8 +7,9 @@
 
     <!-- Enable responsiveness on mobile devices-->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <link rel="canonical" href="/arabic-news-articles-dataset.html"/>
 
-    <title>Moh Badjah | Blog</title>
+    <title>Moh Badjah | Arabic News Articles Dataset</title>
 
     <!-- CSS -->
     <link href="//fonts.googleapis.com/" rel="dns-prefetch">
@@ -22,6 +23,14 @@
     <!-- RSS -->
     <link rel="alternate" type="application/rss+xml" title="RSS" href="/atom.xml">
     <!-- META -->
+        <meta property="og:title" content="Arabic News Articles Dataset"/>
+        <meta property="og:type" content="article"/>
+        <meta property="og:url" content="arabic-news-articles-dataset"/>
+            <meta property="og:description " name="description" content="Recently, I needed a large corpus of Arabic text for a project I was working on at the time, the text had to be clean with minimum spelling/grammatical errors. The available data sets were not enough for my use case, so I collected the data myself from multiple arabic news outlets. I published a part of it..."/>
+
+        <meta property="article:published_time" content="2018-05-18"/>
+        <meta property="article:author" content="https://badjah.net">
+        <meta property="article:section" content="DataAnalysis">
 
 </head>
 
@@ -50,22 +59,76 @@
         </nav>
     </div>
 </div><div class="content container">
-<h1>Archives for Moh Badjah</h1>
+<div class="post"  >
+	<h1 class="post-title">Arabic News Articles Dataset</h1>
+	<span class="post-date">Fri 18 May 2018</span>
+	<p>Recently, I needed a large corpus of Arabic text for a project I was working on at the time, the text had to be clean with minimum spelling/grammatical errors. The available data sets were not enough for my use case, so I collected the data myself from multiple arabic news outlets.
+I published a part of it here. </p>
+<p>It contains 140000 article with a total word count of ~39Million (avg 278 word/article).</p>
+<h3 id="file-structure">File Structure:</h3>
+<p>A csv file with the following structure:</p>
+<p><span style="background-color:#ff9ebe">Title</span>,<span style="background-color:#8eff7f">Category</span>,<span style="background-color:#9ce9ff">Content</span></p>
+<p><strong>Example:</strong></p>
+<p><span dir="rtl" style="background-color:#ff9ebe">إطلاق أثقل صاروخ فضائي في العالم بنجاح</span>,<span style="background-color:#8eff7f">sci-tech</span>,<span dir="rtl" style="background-color:#9ce9ff">نفذت شركة "SpaceX" الأمريكية، أول إطلاق للصاروخ الجديد...</span></p>
+<h3 id="categories">Categories:</h3>
+<p>The articles fall into 7 categories, each with a total of 20000 article:</p>
+<pre class="highlight"><code class="language-python">import pandas as pd
 
-<dl>
-    <dt>Sat 16 June 2018</dt>
-    <dd><a href="/binary-sentiment-classification-of-arabic-tweets.html">Binary Sentiment Classification of Arabic Tweets.</a></dd>
-    <dt>Sat 02 June 2018</dt>
-    <dd><a href="/guide-docker-nginx-letsencrypt-flask-postgres-ubuntu.html">Guide: Docker + Nginx + Letsencrypt + Flask + PostgreSQL</a></dd>
-    <dt>Wed 30 May 2018</dt>
-    <dd><a href="/testing-textsum-model-on-arabic-text.html">تجربة: نموذج لتلخيص الأخبار العربية باستخدام TensorFlow</a></dd>
-    <dt>Wed 23 May 2018</dt>
-    <dd><a href="/categorizing-arabic-news-articles-with-convolutional-neural-networks.html">Categorizing Arabic News Articles With Convolutional Neural Networks</a></dd>
-    <dt>Sun 20 May 2018</dt>
-    <dd><a href="/word-embeddings-word2vec-arabic.html">مقدمة للـ Word2Vec وتضمين الكلمات بالمتجهات</a></dd>
-    <dt>Fri 18 May 2018</dt>
-    <dd><a href="/arabic-news-articles-dataset.html">Arabic News Articles Dataset</a></dd>
-</dl>
+df = pd.read_csv('data.csv', sep=',', encoding='utf-8', names=['title', 'category', 'content'])
+
+df['category'].value_counts()</code></pre>
+
+
+<table>
+<thead>
+<tr>
+<th align="left">category</th>
+<th align="center">value_counts</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">news</td>
+<td align="center">20000</td>
+</tr>
+<tr>
+<td align="left">culture-art</td>
+<td align="center">20000</td>
+</tr>
+<tr>
+<td align="left">sports</td>
+<td align="center">20000</td>
+</tr>
+<tr>
+<td align="left">health-medicine</td>
+<td align="center">20000</td>
+</tr>
+<tr>
+<td align="left">sci-tech</td>
+<td align="center">20000</td>
+</tr>
+<tr>
+<td align="left">business</td>
+<td align="center">20000</td>
+</tr>
+<tr>
+<td align="left">variety</td>
+<td align="center">20000</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tools-i-used">Tools I used:</h3>
+<ul>
+<li>Scrapy</li>
+<li>BeautifulSoup4</li>
+<li>Celery</li>
+<li>Rabbitmq</li>
+<li>AWS EC2 Instances</li>
+</ul>
+<h3 id="download">Download:</h3>
+<p>You can download it from this Github <a href="https://github.com/badjio/ARNADS">repository</a>.</p>
+<p><em>Note: This dataset is intended for scientific research purposes only.</em></p>
+</div>
 </div>
 <script
         src="https://code.jquery.com/jquery-3.3.1.min.js"
